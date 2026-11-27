@@ -36,7 +36,8 @@ const CASE = 24;                                       // taille des cases de la
 // Une courbe lisse (Catmull-Rom) passe par tous les points ; on la découpe en échantillons tous les 4 m environ.
 //   ySol  : hauteur du sol autour du circuit (le virage relevé et les ponts se calculent par rapport à lui)
 //   typeDe(x, y, z) : 'piste' (avec des murs) ou 'ville' (zone ouverte, sans murs, où l'on roule librement)
-function construireCircuit(id, points, { ySol = 0, typeDe = () => 'piste' } = {}) {
+//   plancher : la piste ne descend jamais sous le sol (la courbe lisse « déborde » parfois de quelques centimètres)
+function construireCircuit(id, points, { ySol = 0, typeDe = () => 'piste', plancher = false } = {}) {
   const courbe = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p[0], p[2], p[1])), true, 'centripetal');
   const longueur = courbe.getLength();
   const nb = Math.round(longueur / 4), pas = longueur / nb;
@@ -52,6 +53,7 @@ function construireCircuit(id, points, { ySol = 0, typeDe = () => 'piste' } = {}
   };
   for (let i = 0; i < nb; i++) {
     const p = pts[i], suivant = pts[(i + 1) % nb], avant = pts[(i - 1 + nb) % nb];
+    if (plancher) p.y = Math.max(p.y, ySol);
     let tx = suivant.x - avant.x, tz = suivant.z - avant.z;
     const n = Math.hypot(tx, tz); tx /= n; tz /= n;
     ech.push({ x: p.x, y: p.y, z: p.z, tx, tz, lx: -tz, lz: tx, w: moyenne(p.x, p.z, 3), releveDeg: moyenne(p.x, p.z, 4),
@@ -61,8 +63,15 @@ function construireCircuit(id, points, { ySol = 0, typeDe = () => 'piste' } = {}
     const a = ech[(i - 3 + nb) % nb], b = ech[(i + 3) % nb], s = ech[i];
     const da = Math.atan2(a.tx * b.tz - a.tz * b.tx, a.tx * b.tx + a.tz * b.tz);
     s.courbure = da / (6 * pas);
-    // Relevé : le côté extérieur du virage est surélevé (pente latérale)
-    s.releve = -Math.sign(s.courbure) * Math.tan(s.releveDeg * Math.PI / 180);
+  }
+  // Relevé : le côté extérieur du virage est surélevé (pente latérale). Il grandit avec la courbure (plein relevé sous
+  // 120 m de rayon) et on le lisse : pas de marche quand un virage relevé enchaîne sur un virage dans l'autre sens.
+  const releveBrut = ech.map(s => -clamp(s.courbure * 120, -1, 1) * Math.tan(s.releveDeg * Math.PI / 180));
+  for (let i = 0; i < nb; i++) {
+    const s = ech[i];
+    let somme = 0;
+    for (let k = -4; k <= 4; k++) somme += releveBrut[(i + k + nb) % nb];
+    s.releve = Math.abs(somme) < 1e-4 ? 0 : somme / 9;
     // Dans le virage relevé, on monte toute la piste : son bord intérieur reste au-dessus du sol
     if (s.releve !== 0 && s.y >= ySol) s.y += Math.abs(s.releve) * (s.w + 0.4) + 0.05;
   }

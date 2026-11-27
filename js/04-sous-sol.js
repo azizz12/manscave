@@ -5,7 +5,7 @@
 const SOUS_SOL = { x1: -24, x2: 24, z1: 92, z2: 170, y: -7 };   // le grand espace sous la ville
 const RAMPE = { z1: 60, z2: 92 };                               // la rampe descend de z = 60 à z = 92
 // Le niveau -3 : le hangar privé du circuit TRIP (sous le BITCHA Garage, accessible par l'ascenseur avec un code)
-const TRIP = { x1: -175, x2: 128, z1: -30, z2: 250, y: -34, plafond: -16 };
+const TRIP = { x1: -265, x2: 212, z1: -125, z2: 335, y: -34, plafond: -16 };
 const Y_TRIP = -17;                                             // en dessous de cette hauteur, on est au niveau -3
 
 // Hauteur du sol à un endroit donné (dépend de l'étage où l'on se trouve)

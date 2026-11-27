@@ -1,4 +1,4 @@
-// MAN'SCAVE — 20-circuits.js
+// MAN'SCAVE — 21-circuits.js
 // =====================================================================
 // 12. CHANGER DE CIRCUIT : le circuit actif suit l'étage où l'on est (le haut, ou le TRIP au niveau -3)
 // =====================================================================
@@ -28,6 +28,14 @@ function majCircuit(cible) {
   const voulu = cible.y < Y_TRIP ? CIRCUIT_TRIP : CIRCUIT_HAUT;
   if (voulu !== circuitActif) changerCircuit(voulu);
 }
+
+// Les voitures garées loin de la caméra ne sont pas dessinées (une voiture = une centaine de pièces à dessiner)
+animations.push(() => {
+  for (const v of voitures) {
+    const p = v.groupe.position;
+    v.groupe.visible = v.visibleEtage !== false && ((enVoiture && v === voitureActive) || camera.position.distanceToSquared(p) < 150 * 150);
+  }
+});
 
 // La première descente au -3 ne doit pas « bégayer » : on prépare dès maintenant les matériaux du hangar
 {

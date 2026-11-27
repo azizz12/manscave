@@ -285,14 +285,16 @@ const brumeDehors = new THREE.Color(COULEUR_HORIZON), brumeDedans = new THREE.Co
 let dehors = 0;
 const hemiCiel = hemi.color.clone(), hemiSolCouleur = hemi.groundColor.clone();
 const hemiTrip = new THREE.Color('#c9b4ff'), hemiSolTrip = new THREE.Color('#3a2060'), brumeTrip = new THREE.Color('#150b26');
+const rougePeur = new THREE.Color('#ff3030'), brumePeur = new THREE.Color('#1a0002');
 function majAmbiance(cible, dt) {
   const y = cible.y;
   majVisibilite(y, cible.z);
   if (y < Y_TRIP) {                                     // le hangar TRIP : ni soleil ni ciel, des néons et une brume violette
-    soleil.intensity = 0; hemi.intensity = 1.15;
-    hemi.color.copy(hemiTrip); hemi.groundColor.copy(hemiSolTrip);
+    const p = majPeur(cible, dt);                       // dans la zone sombre : brume rouge épaisse, lumière qui baisse
+    soleil.intensity = 0; hemi.intensity = 1.15 - 0.8 * p;
+    hemi.color.copy(hemiTrip).lerp(rougePeur, p); hemi.groundColor.copy(hemiSolTrip);
     for (const l of lumieresParking) l.intensity = 0;
-    scene.fog.color.copy(brumeTrip); scene.fog.near = 90; scene.fog.far = 420;
+    scene.fog.color.copy(brumeTrip).lerp(brumePeur, p); scene.fog.near = 90 - 84 * p; scene.fog.far = 420 - 345 * p;
     scene.environment = envTrip;
     sousSol = 1;
     return;

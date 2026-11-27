@@ -1,6 +1,6 @@
 // MAN'SCAVE — 19-trip.js
 // =====================================================================
-// 11. LE NIVEAU -3 : le hangar privé « TRIP » et son circuit néon (1,3 km)
+// 11. LE NIVEAU -3 : le hangar privé « TRIP » et son circuit néon (2,2 km)
 // =====================================================================
 // On y descend avec l'ascenseur (bouton -3, protégé par un code). Tout est éclairé par des néons :
 // pas de vraies lampes (trop coûteuses), seulement des matériaux lumineux et un reflet « néon » sur les voitures.
@@ -20,23 +20,31 @@ function hauteurTrip(x, z, yActuel) {
 // --- Le tracé : [x, z, hauteur au-dessus du sol, demi-largeur, relevé en degrés]
 // L'indice 0 est la ligne de départ, sur la grande ligne droite (on roule vers -Z).
 const POINTS_TRIP = [
-  [-20, 168, 0, 8], [-20, 120, 0, 8], [-20, 70, 0, 8], [-20, 35, 0, 8],                 // 1. ligne droite des stands (sous le pont)
-  [-27, 10, 0, 8], [-45, -4, 0, 8], [-65, 0, 0, 7.5],                                     // 2. épingle nord
-  [-82, 14, 0, 7], [-100, 4, 0, 7], [-118, -12, 0, 7], [-140, -10, 0, 7], [-152, 10, 0, 7], // 3. les esses
-  [-152, 40, 0, 7], [-144, 70, 0, 6.5], [-158, 92, 0, 6.5], [-150, 115, 0, 7], [-152, 150, 0, 7],   // 4. ligne ouest + chicane
-  [-146, 190, 0, 8, 12], [-128, 222, 0, 8, 16], [-100, 230, 0, 8, 16], [-78, 215, 0, 8, 10],          // 5. virage relevé sud-ouest
-  [-70, 185, 1, 7.5], [-66, 150, 3, 7.5], [-60, 118, 5.5, 7.5], [-48, 92, 7.5, 7.5], [-22, 78, 8.5, 7.5],   // 6. la montée → le pont
-  [6, 70, 7, 7.5], [30, 62, 4.5, 7.5], [52, 44, 2, 7.5], [64, 18, 0.5, 7.5],                         // 7. la descente
-  [76, -2, 0, 7.5, 10], [96, -6, 0, 7.5, 14], [110, 12, 0, 7.5, 10], [108, 45, 0, 7.5],              // 8. épingle est (relevée)
-  [100, 80, 0, 7], [110, 105, 0, 6.5], [96, 128, 0, 6.5], [104, 155, 0, 7], [102, 185, 0, 7.5],      // 9. ligne est + chicane
-  [92, 214, 0, 8, 12], [66, 232, 0, 8, 12], [30, 236, 0, 8], [5, 230, 0, 8], [-12, 216, 0, 8], [-19, 196, 0, 8],   // 10. retour
+  [-20, 168, 0, 8], [-20, 110, 0, 8], [-20, 40, 0, 8], [-20, -20, 0, 8], [-20, -60, 0, 8],          // 1. ligne droite des stands (sous le pont)
+  [-30, -90, 0, 8, 10], [-55, -105, 0, 8, 14], [-82, -98, 0, 8, 10], [-95, -75, 0, 7.5],             // 2. épingle nord (relevée)
+  [-100, -45, 0, 7], [-125, -30, 0, 7], [-150, -45, 0, 7], [-175, -70, 0, 7],                        // 3. les esses
+  [-205, -75, 0, 7, 8], [-228, -55, 0, 7.5, 10], [-235, -20, 0, 7.5],
+  [-235, 30, 0, 8], [-238, 90, 0, 8],                                                                // 4. LA CAGE THORACIQUE (zone sombre)
+  [-225, 130, 0, 7], [-245, 155, 0, 7], [-232, 180, 0, 7.5], [-235, 230, 0, 8],                      //    puis la chicane
+  [-228, 275, 0, 8.5, 12], [-205, 305, 0, 8.5, 16], [-170, 315, 0, 8.5, 16], [-138, 300, 0, 8.5, 12], [-120, 270, 0, 8],   // 5. grand virage relevé
+  [-112, 235, 0.5, 7.5], [-108, 195, 2, 7.5], [-100, 150, 4, 7.5], [-88, 112, 6, 7.5], [-66, 84, 7.5, 7.5], [-40, 68, 8.5, 7.5],   // 6. la montée
+  [-2, 62, 8.5, 7.5], [25, 58, 7, 7.5],                                                              // 7. le pont au-dessus des stands
+  [55, 45, 4.5, 7.5], [85, 22, 2, 7.5], [110, -5, 0.5, 7.5],                                         // 8. la descente
+  [130, -40, 0, 7.5], [140, -80, 0, 7.5, 10], [160, -100, 0, 8, 14], [185, -85, 0, 8, 14], [190, -50, 0, 8, 10],   // 9. épingle nord-est
+  [182, 0, 0, 7.5], [188, 50, 0, 7.5], [175, 90, 0, 7], [192, 115, 0, 7], [180, 140, 0, 7.5],       // 10. ligne est : tremplin + chicane
+  [185, 190, 0, 8], [182, 240, 0, 8],
+  [172, 280, 0, 8.5, 12], [145, 305, 0, 8.5, 14], [110, 312, 0, 8],                                  // 11. virage sud-est (relevé)
+  [70, 308, 0, 8], [40, 295, 0, 7.5], [20, 275, 0, 7.5], [5, 258, 0, 8], [-12, 232, 0, 8], [-19, 200, 0, 8],   // 12. retour aux stands
 ].map(([x, z, h, w, r]) => [x, z, Y0 + h, w, r]);
 // La ligne droite des stands est ouverte côté parking (pas de mur) : on y entre depuis l'ascenseur
 const STANDS = { x: -20, z1: 108, z2: 198 };
 const CIRCUIT_TRIP = construireCircuit('trip', POINTS_TRIP, {
-  ySol: Y0, typeDe: (x, y, z) => (Math.abs(x - STANDS.x) < 4 && z > STANDS.z1 && z < STANDS.z2 ? 'ville' : 'piste'),
+  ySol: Y0, plancher: true, typeDe: (x, y, z) => (Math.abs(x - STANDS.x) < 4 && z > STANDS.z1 && z < STANDS.z2 ? 'ville' : 'piste'),
 });
 const LIGNE_TRIP = 168;
+// La zone sombre (la « cage thoracique ») sur la ligne ouest : pas d'arches néon, brume rouge, battements de cœur
+const ZONE_SOMBRE = { x1: -258, x2: -212, z1: 10, z2: 118 };
+const dansZoneSombre = (x, z) => x > ZONE_SOMBRE.x1 && x < ZONE_SOMBRE.x2 && z > ZONE_SOMBRE.z1 && z < ZONE_SOMBRE.z2;
 Object.assign(CIRCUIT_TRIP, {
   nom: 'Circuit TRIP',
   places: [[-23, 174], [-17, 180], [-23, 186], [-17, 192]],     // la grille, derrière la ligne (on part vers -Z)
@@ -45,8 +53,8 @@ Object.assign(CIRCUIT_TRIP, {
   couleursCarte: [[7, 'rgba(20,6,40,.92)'], [3.2, '#ff5fd2'], [1.2, '#ffffff']],
 });
 equiperCircuit(CIRCUIT_TRIP, {
-  sauts: [{ x: 107, z: 48, longueur: 20, hauteur: 1.7 }],
-  boosts: [{ x: -151, z: 128 }, { x: -68, z: 170 }, { x: 30, z: 236 }],
+  sauts: [{ x: 187, z: 58, longueur: 20, hauteur: 1.8 }],
+  boosts: [{ x: -235, z: 5 }, { x: -108, z: 200 }, { x: 183, z: 15 }, { x: 95, z: 311 }],
 });
 // À partir d'ici et jusqu'à la fin du fichier, le circuit actif est le TRIP (rubanTrip(), poseSurPiste()… travaillent sur lui)
 
@@ -120,28 +128,14 @@ function fusionnerFormes(geos) {
   const sol = new THREE.Mesh(new THREE.PlaneGeometry(L, P), new THREE.MeshStandardMaterial({
     color: '#1a1428', roughness: 0.3, metalness: 0.35, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.9, envMapIntensity: 0.7 }));
   sol.rotation.x = -Math.PI / 2; sol.position.set(cx, Y0, cz); scene.add(sol);
-  // Le plafond (sombre) et ses poutres néon
-  const plafond = new THREE.Mesh(new THREE.PlaneGeometry(L, P), new THREE.MeshBasicMaterial({ color: '#06040b' }));
-  plafond.rotation.x = Math.PI / 2; plafond.position.set(cx, TRIP.plafond, cz); scene.add(plafond);
-  const poutres = [];
-  for (let z = TRIP.z1 + 20; z < TRIP.z2; z += 30) poutres.push(new THREE.BoxGeometry(L, 0.25, 0.35).translate(cx, TRIP.plafond - 0.4, z));
-  scene.add(new THREE.Mesh(fusionnerFormes(poutres), matTripViolet));
-  const poutres2 = [];
-  for (let x = TRIP.x1 + 25; x < TRIP.x2; x += 50) poutres2.push(new THREE.BoxGeometry(0.25, 0.25, P).translate(x, TRIP.plafond - 0.6, cz));
-  scene.add(new THREE.Mesh(fusionnerFormes(poutres2), matTripCyan));
-  // Les 4 murs, avec des bandes néon verticales
+  // Les murs : un muret sombre de 3 m (le reste, au-dessus, c'est l'univers : voir 20-trip-decor.js)
   const matMur = new THREE.MeshStandardMaterial({ color: '#1e1830', emissive: '#12081f', roughness: 0.8, metalness: 0.2, envMapIntensity: 0.5 });
-  boiteTrip(L + 2, H, 1, cx, Y0 + H / 2, TRIP.z1 - 0.5, matMur);
-  boiteTrip(L + 2, H, 1, cx, Y0 + H / 2, TRIP.z2 + 0.5, matMur);
-  boiteTrip(1, H, P, TRIP.x1 - 0.5, Y0 + H / 2, cz, matMur);
-  boiteTrip(1, H, P, TRIP.x2 + 0.5, Y0 + H / 2, cz, matMur);
-  const bandesRose = [], bandesCyan = [];
-  let k = 0;
-  for (let x = TRIP.x1 + 8; x < TRIP.x2; x += 14, k++) for (const z of [TRIP.z1 + 0.06, TRIP.z2 - 0.06])
-    (k % 2 ? bandesRose : bandesCyan).push(new THREE.BoxGeometry(0.3, H - 2, 0.06).translate(x, Y0 + H / 2, z));
-  for (let z = TRIP.z1 + 8; z < TRIP.z2; z += 14, k++) for (const x of [TRIP.x1 + 0.06, TRIP.x2 - 0.06])
-    (k % 2 ? bandesRose : bandesCyan).push(new THREE.BoxGeometry(0.06, H - 2, 0.3).translate(x, Y0 + H / 2, z));
-  scene.add(new THREE.Mesh(fusionnerFormes(bandesRose), matTripRose), new THREE.Mesh(fusionnerFormes(bandesCyan), matTripCyan));
+  boiteTrip(L + 2, 3, 1, cx, Y0 + 1.5, TRIP.z1 - 0.5, matMur);
+  boiteTrip(L + 2, 3, 1, cx, Y0 + 1.5, TRIP.z2 + 0.5, matMur);
+  boiteTrip(1, 3, P, TRIP.x1 - 0.5, Y0 + 1.5, cz, matMur);
+  boiteTrip(1, 3, P, TRIP.x2 + 0.5, Y0 + 1.5, cz, matMur);
+  scene.add(new THREE.Mesh(fusionnerFormes([[L, 0.14, 0.1, cx, TRIP.z1 + 0.05], [L, 0.14, 0.1, cx, TRIP.z2 - 0.05], [0.1, 0.14, P, TRIP.x1 + 0.05, cz], [0.1, 0.14, P, TRIP.x2 - 0.05, cz]]
+    .map(([l, h, p, x, z]) => new THREE.BoxGeometry(l, h, p).translate(x, Y0 + 3, z))), matTripCyan));
   // Une plinthe lumineuse tout autour du hangar
   const plinthe = [[L, 0.12, 0.1, cx, TRIP.z1 + 0.1], [L, 0.12, 0.1, cx, TRIP.z2 - 0.1], [0.1, 0.12, P, TRIP.x1 + 0.1, cz], [0.1, 0.12, P, TRIP.x2 - 0.1, cz]]
     .map(([l, h, p, x, z]) => new THREE.BoxGeometry(l, h, p).translate(x, Y0 + 0.5, z));
@@ -271,14 +265,14 @@ const FEUX_TRIP = creerFeux({ x: STANDS.x, y: Y0, z: LIGNE_TRIP - 1.5, rotY: Mat
 {
   const RAYON = 9.5;                                    // les arches sont redimensionnées à la largeur de la piste
   const geo = new THREE.TorusGeometry(RAYON, 0.16, 6, 28, Math.PI);
-  const TUNNELS = [[-160, -140, 118, 152], [-10, 70, 228, 242], [96, 120, 16, 40]];   // [x1, x2, z1, z2]
+  const TUNNELS = [[170, 200, -20, 30], [60, 140, 296, 320], [-240, -220, 175, 235]];   // [x1, x2, z1, z2]
   const dansTunnel = s => TUNNELS.some(([x1, x2, z1, z2]) => s.x > x1 && s.x < x2 && s.z > z1 && s.z < z2);
   const pontAuDessus = s => piste.some(t => t.pont && t.y > s.y + 4 && Math.hypot(t.x - s.x, t.z - s.z) < 26);
   const prochesPortiques = s => Math.hypot(s.x - STANDS.x, s.z - LIGNE_TRIP) < 14 || Math.hypot(s.x + 15, s.z - 207) < 14;
   const choisis = [];
   for (let i = 0, dernier = -99; i < NB; i++) {
     const s = piste[i], ecart = dansTunnel(s) ? 2 : 11;
-    if (i - dernier < ecart || s.type !== 'piste' || s.y > Y0 + 2 || pontAuDessus(s) || prochesPortiques(s)) continue;
+    if (i - dernier < ecart || s.type !== 'piste' || s.y > Y0 + 2 || pontAuDessus(s) || prochesPortiques(s) || dansZoneSombre(s.x, s.z)) continue;
     choisis.push(i); dernier = i;
   }
   const couleurs = [NEON.rose, NEON.cyan, NEON.violet];
@@ -302,10 +296,11 @@ const FEUX_TRIP = creerFeux({ x: STANDS.x, y: Y0, z: LIGNE_TRIP - 1.5, rotY: Mat
   const compte2 = [0, 0, 0];
   choisis.forEach((i, n) => {
     const s = piste[i], k = n % 3, e = (s.w + 4) * 2;
+    if (Math.abs(s.releve) > 0.01) return;             // (pas sur un virage relevé : la tache plate traverserait la piste penchée)
     mat.makeRotationY(Math.atan2(s.tx, s.tz)).scale(new THREE.Vector3(e, 1, 9)).setPosition(s.x, solPiste(s, 0) + 0.09, s.z);
     halos[k].setMatrixAt(compte2[k]++, mat);
   });
-  halos.forEach(h => { h.instanceMatrix.needsUpdate = true; h.frustumCulled = false; h.renderOrder = 1; scene.add(h); });
+  halos.forEach((h, k) => { h.count = compte2[k]; h.instanceMatrix.needsUpdate = true; h.frustumCulled = false; h.renderOrder = 1; scene.add(h); });
   // Les couleurs des arches tournent doucement (l'effet « TRIP »)
   const hsl = couleurs.map(c => { const o = {}; new THREE.Color(c).getHSL(o); return o; });
   animations.push(() => {
@@ -324,8 +319,8 @@ const formesTrip = [];
     () => new THREE.IcosahedronGeometry(3.2, 0), () => new THREE.OctahedronGeometry(3.4, 0), () => new THREE.TorusGeometry(3, 0.9, 8, 18),
     () => new THREE.TetrahedronGeometry(3.6, 0), () => new THREE.TorusKnotGeometry(2.2, 0.55, 64, 8), () => new THREE.DodecahedronGeometry(3, 0),
   ];
-  const places = [[-110, 55, 12], [-104, 118, 10], [-118, 168, 13], [-88, 30, 9], [84, 30, 11], [62, 120, 13], [70, 190, 10],
-                  [-40, 150, 14], [-60, 40, 12], [20, 10, 12], [-45, 205, 12], [-128, 22, 14]];
+  const places = [[-160, 60, 13], [-150, 230, 12], [-60, -40, 13], [-170, -10, 12], [120, 60, 13], [100, 200, 12], [140, -60, 14],
+                  [-60, 250, 13], [40, -60, 12], [150, 130, 14], [-190, 150, 12], [60, 120, 14]];
   const couleurs = Object.values(NEON);
   places.forEach(([x, z, h], k) => {
     const geo = modeles[k % modeles.length]();
@@ -493,20 +488,3 @@ function majGardeCorps() {
 CIRCUIT_TRIP.caisses = creerCaisses([0.12, 0.3, 0.46, 0.62, 0.78, 0.9]);
 for (const c of CIRCUIT_TRIP.caisses) c.mesh.visible = false;
 activerCircuit(CIRCUIT_HAUT);
-
-// Tout ce qui appartient au hangar (sauf les voitures, leurs panneaux et les garde-corps, gérés à part)
-const objetsTrip = scene.children.slice(debutTrip).filter(o => !voitures.some(v => v.groupe === o || v.panneau === o)
-  && !gardeCorps.some(g => g.m === o) && !CIRCUIT_TRIP.caisses.some(c => c.mesh === o));
-
-// --- Le reflet « néon » sur les carrosseries (à la place du ciel) : une petite pièce colorée photographiée une fois
-const envCiel = scene.environment;
-const envTrip = (() => {
-  const s = new THREE.Scene();
-  s.add(new THREE.Mesh(new THREE.SphereGeometry(50, 16, 8), new THREE.MeshBasicMaterial({ color: '#0a0614', side: THREE.BackSide })));
-  [[NEON.rose, 0], [NEON.cyan, 1.6], [NEON.violet, 3.2], [NEON.jaune, 4.7]].forEach(([c, a]) => {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(30, 2, 2), new THREE.MeshBasicMaterial({ color: c }));
-    b.position.set(Math.cos(a) * 30, 12 + (a % 2) * 6, Math.sin(a) * 30); b.lookAt(0, 12, 0); s.add(b);
-  });
-  const haut = new THREE.Mesh(new THREE.BoxGeometry(60, 1, 2), new THREE.MeshBasicMaterial({ color: '#b98cff' })); haut.position.y = 40; s.add(haut);
-  return new THREE.PMREMGenerator(renderer).fromScene(s).texture;
-})();

@@ -642,7 +642,7 @@ function majVisibilite(y, z) {
   const auTrip = zone === 'trip';
   for (const o of objetsTrip) o.visible = auTrip;
   for (const o of objetsHorsTrip) o.visible = !auTrip;
-  for (const v of voitures) v.groupe.visible = (v.groupe.position.y < Y_TRIP) === auTrip
+  for (const v of voitures) v.visibleEtage = (v.groupe.position.y < Y_TRIP) === auTrip
     && (!v.couleurFixe || zone !== 'dehors' || v.groupe.position.y > -10.5);   // une voiture du garage sortie reste visible
   if (auTrip) return;
   for (const o of objetsGarage) o.visible = zone === 'garage' || (zone !== 'dehors' && puitsOuvert);
