@@ -153,7 +153,9 @@
   .couleurs button { width: 32px; height: 32px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px #c9d6e2; cursor: pointer; }
   .couleurs button.actif { box-shadow: 0 0 0 3px #141B34; }
   .record { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #e6ebf1; font-variant-numeric: tabular-nums; }
-  .record b { font-size: 18px; }
+  .record b { font-size: 18px; width: 92px; text-align: right; }
+  .record span { flex: 1; }
+  .record-tete { padding: 4px 0; } .record-tete span, .record-tete b { font-size: 11px; font-weight: 800; color: #8a94a6; letter-spacing: .06em; }
   @media (max-width: 680px) {
     .menu-boite { grid-template-columns: 1fr; min-height: 0; }
     .menu-nav { padding: 16px; gap: 12px; }
@@ -200,13 +202,15 @@
               background: #ff8a1e; color: #fff; font: 700 12px system-ui; box-shadow: 0 4px 12px rgba(0,0,0,.25); }
   #aide-souris { left: 50%; top: 44%; transform: translate(-50%, -50%); display: none; padding: 10px 18px; border-radius: 99px;
                  background: rgba(14,20,32,.8); color: #fff; font-weight: 600; white-space: nowrap; }
-  #ascenseur { right: 18px; top: 50%; transform: translateY(-50%); display: none; flex-direction: column; align-items: center; gap: 10px;
+  #ascenseur { left: 18px; top: 50%; transform: translateY(-50%); display: none; flex-direction: column; align-items: center; gap: 10px;
                 padding: 14px 12px; border-radius: 18px; background: linear-gradient(#2a2e36, #16181d); border: 1px solid #454b55;
                 box-shadow: 0 10px 30px rgba(0,0,0,.45); pointer-events: auto; }
   #ascenseur .asc-titre { color: #9aa3ae; font: 800 10px system-ui; letter-spacing: .12em; }
   #ascenseur button { width: 58px; height: 58px; border-radius: 50%; border: 2px solid #5b626d; background: radial-gradient(#3a3f47, #22252b);
                       color: #e9edf2; font: 900 20px system-ui; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
   #ascenseur button small { font: 600 8px system-ui; color: #8f98a3; margin-top: 3px; }
+  #ascenseur button.asc-prive { border-color: #b04cff; color: #e9c8ff; } #ascenseur button.asc-prive small { color: #d29bff; }
+  #ascenseur button.asc-prive.actif { border-color: #30ff8a; color: #30ff8a; }
   #ascenseur button.actif { border-color: #30ff8a; color: #30ff8a; box-shadow: 0 0 14px rgba(48,255,138,.55), inset 0 0 10px rgba(48,255,138,.25); }
   #fps { bottom: 12px; left: 50%; transform: translateX(-50%); padding: 5px 11px; border-radius: 99px; background: rgba(14,20,32,.62);
          color: #9ff7b8; font: 700 12px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .02em; }

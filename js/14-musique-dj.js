@@ -178,7 +178,7 @@ function majDJ(dt) {
     L.upX.value = 0; L.upY.value = 1; L.upZ.value = 0;
   } else { L.setPosition(p.x, p.y, p.z); L.setOrientation(vAvantCam.x, vAvantCam.y, vAvantCam.z, 0, 1, 0); }
   const y = enVoiture ? vehicule.position.y : etat.y;
-  const auGarage = y < -10.5, auParking = !auGarage && y < -3;
+  const auGarage = y < -10.5 && y > Y_TRIP, auParking = y < -3 && y > -10.5;   // (au niveau -3, on n'entend plus le DJ)
   const volume = parseFloat($('dj-volume').value) * (reglages.volMusique ?? 0.7) * 1.4;
   dj.sortie.gain.setTargetAtTime(auGarage ? volume : auParking ? volume * 0.35 : 0, t, 0.2);
   dj.filtre.frequency.setTargetAtTime(auGarage ? 20000 : 380, t, 0.2);   // à travers le plafond, on n'entend que les basses

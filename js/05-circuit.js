@@ -29,71 +29,123 @@ const POINTS_CIRCUIT = [
   [-200, 0, 0, 8],                                                                                        // 10. retour en ville par l'avenue ouest
   ...ROUTE_VILLE.map(([x, z]) => [x, z, 0, 7]),                                                          // 11. les rues de la ville et 2 immeubles traversés
 ];
-const courbeCircuit = new THREE.CatmullRomCurve3(POINTS_CIRCUIT.map(p => new THREE.Vector3(p[0], p[2], p[1])), true, 'centripetal');
-const LONGUEUR_CIRCUIT = courbeCircuit.getLength();
-const NB = Math.round(LONGUEUR_CIRCUIT / 4);           // un échantillon tous les 4 mètres environ
-const PAS_PISTE = LONGUEUR_CIRCUIT / NB;
 const dansVille = (x, z) => Math.abs(x) < 177 && Math.abs(z) < 177;
+const CASE = 24;                                       // taille des cases de la grille de recherche rapide
 
-// --- Les échantillons de la piste : position, direction, largeur, relevé, type
-const piste = [];
-{
-  const pts = courbeCircuit.getSpacedPoints(NB);
+// --- Fabrique un circuit à partir de ses points de contrôle (le jeu en a deux : celui du haut et le TRIP au niveau -3).
+// Une courbe lisse (Catmull-Rom) passe par tous les points ; on la découpe en échantillons tous les 4 m environ.
+//   ySol  : hauteur du sol autour du circuit (le virage relevé et les ponts se calculent par rapport à lui)
+//   typeDe(x, y, z) : 'piste' (avec des murs) ou 'ville' (zone ouverte, sans murs, où l'on roule librement)
+function construireCircuit(id, points, { ySol = 0, typeDe = () => 'piste' } = {}) {
+  const courbe = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p[0], p[2], p[1])), true, 'centripetal');
+  const longueur = courbe.getLength();
+  const nb = Math.round(longueur / 4), pas = longueur / nb;
+  const ech = [];
+  const pts = courbe.getSpacedPoints(nb);
   const moyenne = (x, z, j) => {                       // moyenne des 2 points de contrôle les plus proches
     let a = null, b = null;
-    for (const p of POINTS_CIRCUIT) {
+    for (const p of points) {
       const d = Math.hypot(p[0] - x, p[1] - z), v = p[j] || 0;
       if (!a || d < a.d) { b = a; a = { d, v }; } else if (!b || d < b.d) b = { d, v };
     }
     return (a.v * b.d + b.v * a.d) / (a.d + b.d + 0.001);
   };
-  for (let i = 0; i < NB; i++) {
-    const p = pts[i], suivant = pts[(i + 1) % NB], avant = pts[(i - 1 + NB) % NB];
+  for (let i = 0; i < nb; i++) {
+    const p = pts[i], suivant = pts[(i + 1) % nb], avant = pts[(i - 1 + nb) % nb];
     let tx = suivant.x - avant.x, tz = suivant.z - avant.z;
     const n = Math.hypot(tx, tz); tx /= n; tz /= n;
-    piste.push({ x: p.x, y: p.y, z: p.z, tx, tz, lx: -tz, lz: tx, w: moyenne(p.x, p.z, 3), releveDeg: moyenne(p.x, p.z, 4),
-                 type: dansVille(p.x, p.z) && p.y < -0.3 ? 'ville' : 'piste', courbure: 0, releve: 0, bosse: 0, pont: false, kv: 0 });
+    ech.push({ x: p.x, y: p.y, z: p.z, tx, tz, lx: -tz, lz: tx, w: moyenne(p.x, p.z, 3), releveDeg: moyenne(p.x, p.z, 4),
+               type: typeDe(p.x, p.y, p.z), courbure: 0, releve: 0, bosse: 0, pont: false, kv: 0 });
   }
-  for (let i = 0; i < NB; i++) {                       // courbure = à quel point ça tourne (1 / rayon)
-    const a = piste[(i - 3 + NB) % NB], b = piste[(i + 3) % NB], s = piste[i];
+  for (let i = 0; i < nb; i++) {                       // courbure = à quel point ça tourne (1 / rayon)
+    const a = ech[(i - 3 + nb) % nb], b = ech[(i + 3) % nb], s = ech[i];
     const da = Math.atan2(a.tx * b.tz - a.tz * b.tx, a.tx * b.tx + a.tz * b.tz);
-    s.courbure = da / (6 * PAS_PISTE);
+    s.courbure = da / (6 * pas);
     // Relevé : le côté extérieur du virage est surélevé (pente latérale)
     s.releve = -Math.sign(s.courbure) * Math.tan(s.releveDeg * Math.PI / 180);
-    // Dans le virage relevé, on monte toute la piste : son bord intérieur reste au-dessus de l'herbe
-    if (s.releve !== 0 && s.y >= 0) s.y += Math.abs(s.releve) * (s.w + 0.4) + 0.05;
+    // Dans le virage relevé, on monte toute la piste : son bord intérieur reste au-dessus du sol
+    if (s.releve !== 0 && s.y >= ySol) s.y += Math.abs(s.releve) * (s.w + 0.4) + 0.05;
   }
   // Courbure verticale (sommets de bosse < 0) : sert à faire décoller la voiture sur les crêtes à grande vitesse
-  for (let i = 0; i < NB; i++) {
-    const a = piste[(i - 2 + NB) % NB], s = piste[i], b = piste[(i + 2) % NB];
-    s.kv = ((b.y - s.y) - (s.y - a.y)) / (4 * PAS_PISTE * PAS_PISTE);
+  for (let i = 0; i < nb; i++) {
+    const a = ech[(i - 2 + nb) % nb], s = ech[i], b = ech[(i + 2) % nb];
+    s.kv = ((b.y - s.y) - (s.y - a.y)) / (4 * pas * pas);
   }
+  // Grille de recherche rapide : pour trouver vite l'endroit de la piste le plus proche
+  const grille = new Map();
+  ech.forEach((s, i) => {
+    const k = Math.floor(s.x / CASE) + ',' + Math.floor(s.z / CASE);
+    if (!grille.has(k)) grille.set(k, []);
+    grille.get(k).push(i);
+  });
+  // Un morceau de piste est « en pont » quand une autre partie de la piste passe nettement plus bas, juste dessous
+  for (let i = 0; i < nb; i++) {
+    const s = ech[i];
+    if (s.type !== 'piste' || s.y < ySol + 3) continue;
+    const cx = Math.floor(s.x / CASE), cz = Math.floor(s.z / CASE);
+    for (let a = -2; a <= 2 && !s.pont; a++) for (let b = -2; b <= 2 && !s.pont; b++) {
+      for (const j of grille.get((cx + a) + ',' + (cz + b)) || []) {
+        const ecart = Math.abs(((j - i) % nb + nb + nb / 2) % nb - nb / 2);
+        if (ecart < 30) continue;
+        const t = ech[j];
+        if (t.y < s.y - 4 && Math.hypot(t.x - s.x, t.z - s.z) < s.w + t.w + 16) { s.pont = true; break; }
+      }
+    }
+  }
+  return { id, piste: ech, NB: nb, PAS_PISTE: pas, longueur, grillePiste: grille, ySol,
+           sauts: [], boosts: [], barrieres: [], pneus: [], checkpoints: [], places: [], caisses: [] };
 }
+
+// --- Le circuit « actif » : celui de l'étage où l'on se trouve. Tout le jeu (conduite, course, adversaires, objets)
+// travaille avec ces variables ; on les échange quand on change de circuit.
+let circuitActif = null, piste, NB, PAS_PISTE, grillePiste, L_CIRCUIT;
+let SAUTS, BOOSTS, BARRIERES_MOBILES, PILES_PNEUS, CHECKPOINTS, PLACES_GRILLE;
+function activerCircuit(c) {
+  circuitActif = c;
+  ({ piste, NB, PAS_PISTE, grillePiste } = c);
+  L_CIRCUIT = NB * PAS_PISTE;
+  SAUTS = c.sauts; BOOSTS = c.boosts; BARRIERES_MOBILES = c.barrieres; PILES_PNEUS = c.pneus;
+  CHECKPOINTS = c.checkpoints; PLACES_GRILLE = c.places;
+}
+function indiceProche(x, z) {
+  let m = 0, d = Infinity;
+  piste.forEach((s, i) => { const e = Math.hypot(s.x - x, s.z - z); if (e < d) { d = e; m = i; } });
+  return m;
+}
+// Les attractions d'un circuit (positions données en x, z ; on retrouve l'endroit de la piste le plus proche)
+//   sauts : tremplins · boosts : plaques d'accélération · barrieres : barrières mobiles · pneus : piles de pneus [x, z, lat]
+function equiperCircuit(c, { sauts = [], boosts = [], barrieres = [], pneus = [] }) {
+  activerCircuit(c);
+  c.sauts = sauts.map(saut => ({ ...saut, i0: indiceProche(saut.x, saut.z), n: Math.round(saut.longueur / PAS_PISTE) }));
+  for (const saut of c.sauts) for (let k = 0; k <= saut.n; k++) piste[(saut.i0 + k) % NB].bosse = saut.hauteur * Math.pow(k / saut.n, 1.3);
+  c.boosts = boosts.map(b => ({ ...b, i: indiceProche(b.x, b.z) }));
+  c.barrieres = barrieres.map(b => ({ ...b, i: indiceProche(b.x, b.z), lat: 0 }));
+  c.pneus = pneus.map(([x, z, lat]) => ({ i: indiceProche(x, z), lat }));
+  c.checkpoints = [0.2, 0.4, 0.6, 0.8].map(f => Math.round(f * NB));   // 4 checkpoints par tour, dans l'ordre
+  activerCircuit(c);
+}
+
+const CIRCUIT_HAUT = construireCircuit('haut', POINTS_CIRCUIT, { typeDe: (x, y, z) => (dansVille(x, z) && y < -0.3 ? 'ville' : 'piste') });
+Object.assign(CIRCUIT_HAUT, {
+  nom: 'Circuit MAN\'SCAVE',
+  places: [[-3, 144], [3, 138], [-3, 132], [3, 126]],   // grille de départ (en quinconce, comme en F1)
+  yGrille: SOUS_SOL.y, feux: FEUX_HAUT, console: CONSOLE_HAUT,
+  surGrille: p => p.y < -3 && p.y > -10 && Math.abs(p.x) < 8 && p.z < LIGNE_DEPART - 2 && p.z > LIGNE_DEPART - 32,
+});
+// Sauts : un tremplin qui monte, puis le sol « disparaît » : la voiture s'envole !
+// Accélérateurs : des plaques lumineuses qui donnent un coup de boost
+// Barrières mobiles : elles glissent d'un côté à l'autre de la piste · Piles de pneus fixes (à éviter) à la sortie de l'épingle
+equiperCircuit(CIRCUIT_HAUT, {
+  sauts: [{ x: 0, z: 352, longueur: 26, hauteur: 2.3 }, { x: -262, z: 104, longueur: 24, hauteur: 3.2 }],
+  boosts: [{ x: 0, z: 300 }, { x: 512, z: 444 }, { x: 165, z: 420 }, { x: -262, z: 150 }, { x: -130, z: 0 }],
+  barrieres: [{ x: 350, z: 424, vitesse: 1.25, phase: 0 }, { x: 292, z: 423, vitesse: 1.05, phase: 2.1 }],
+  pneus: [[-282, 598, 3.4], [-298, 612, -3.4], [-316, 622, 3.4]],
+});
+
 // Hauteur du sol de la piste à une distance « lat » de la ligne centrale
 const solPiste = (s, lat) => s.y + s.bosse + lat * s.releve;
 
 const debutDehors = scene.children.length;             // tout ce qui est dehors : piste, relief, décor, quartier, parc
-// --- Grille de recherche rapide : pour trouver vite l'endroit de la piste le plus proche
-const CASE = 24, grillePiste = new Map();
-piste.forEach((s, i) => {
-  const k = Math.floor(s.x / CASE) + ',' + Math.floor(s.z / CASE);
-  if (!grillePiste.has(k)) grillePiste.set(k, []);
-  grillePiste.get(k).push(i);
-});
-// Un morceau de piste est « en pont » quand une autre partie de la piste passe nettement plus bas, juste dessous
-for (let i = 0; i < NB; i++) {
-  const s = piste[i];
-  if (s.type !== 'piste' || s.y < 3) continue;
-  const cx = Math.floor(s.x / CASE), cz = Math.floor(s.z / CASE);
-  for (let a = -2; a <= 2 && !s.pont; a++) for (let b = -2; b <= 2 && !s.pont; b++) {
-    for (const j of grillePiste.get((cx + a) + ',' + (cz + b)) || []) {
-      const ecart = Math.abs(((j - i) % NB + NB + NB / 2) % NB - NB / 2);
-      if (ecart < 30) continue;
-      const t = piste[j];
-      if (t.y < s.y - 4 && Math.hypot(t.x - s.x, t.z - s.z) < s.w + t.w + 16) { s.pont = true; break; }
-    }
-  }
-}
 function trouverPiste(x, y, z, indiceConnu = -1) {
   let meilleur = -1, score = Infinity;
   const tester = i => {
@@ -118,28 +170,7 @@ function trouverPiste(x, y, z, indiceConnu = -1) {
   return { i: meilleur, s, lat, dist: Math.hypot(x - piste[meilleur].x, z - piste[meilleur].z), y: sol, base: s.y + (s2.y - s.y) * f,
            w: s.w + (s2.w - s.w) * f, pente: (solPiste(s2, 0) - solPiste(s, 0)) / PAS_PISTE, releve: s.releve, type: s.type };
 }
-function indiceProche(x, z) {
-  let m = 0, d = Infinity;
-  piste.forEach((s, i) => { const e = Math.hypot(s.x - x, s.z - z); if (e < d) { d = e; m = i; } });
-  return m;
-}
-
-// --- Les attractions du circuit
-// Sauts : un tremplin qui monte, puis le sol « disparaît » : la voiture s'envole !
-const SAUTS = [{ x: 0, z: 352, longueur: 26, hauteur: 2.3 }, { x: -262, z: 104, longueur: 24, hauteur: 3.2 }];
-for (const saut of SAUTS) {
-  saut.i0 = indiceProche(saut.x, saut.z);
-  saut.n = Math.round(saut.longueur / PAS_PISTE);
-  for (let k = 0; k <= saut.n; k++) piste[(saut.i0 + k) % NB].bosse = saut.hauteur * Math.pow(k / saut.n, 1.3);
-}
 const surTremplin = i => SAUTS.some(s => { const k = (i - s.i0 + NB) % NB; return k <= s.n; });
-// Accélérateurs : des plaques lumineuses qui donnent un coup de boost
-const BOOSTS = [{ x: 0, z: 300 }, { x: 512, z: 444 }, { x: 165, z: 420 }, { x: -262, z: 150 }, { x: -130, z: 0 }].map(b => ({ ...b, i: indiceProche(b.x, b.z) }));
-// Barrières mobiles : elles glissent d'un côté à l'autre de la piste
-const BARRIERES_MOBILES = [{ x: 350, z: 424, vitesse: 1.25, phase: 0 }, { x: 292, z: 423, vitesse: 1.05, phase: 2.1 }]
-  .map(b => ({ ...b, i: indiceProche(b.x, b.z), lat: 0 }));
-// Piles de pneus fixes (à éviter) à la sortie de l'épingle
-const PILES_PNEUS = [[-282, 598, 3.4], [-298, 612, -3.4], [-316, 622, 3.4]].map(([x, z, lat]) => ({ i: indiceProche(x, z), lat }));
 
 // --- Fabrication des « rubans » qui suivent la piste (asphalte, lignes, murs…)
 function ruban(materiau, garder, coins, couleurs) {

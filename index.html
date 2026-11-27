@@ -55,6 +55,7 @@
           <li>Arrête-toi sur la <b>grille</b> : les feux s'allument.</li>
           <li>Fonce à l'extinction des feux !</li>
         </ol>
+        <p class="note">Un 2e circuit, <b>TRIP</b>, t'attend au niveau -3 : prends l'ascenseur (touche <kbd>3</kbd>) et tape le code secret.</p>
         <p class="note">Roule dans les <b>caisses mystère</b> pour gagner un objet, puis <kbd data-touche="utiliser">F</kbd> pour l'utiliser : missile, mine, bouclier ou turbo.</p>
       </section>
 
@@ -119,6 +120,7 @@
   <span class="asc-titre">ASCENSEUR</span>
   <button data-niveau="-1">-1<small>touche 1</small></button>
   <button data-niveau="-2">-2<small>touche 2</small></button>
+  <button data-niveau="-3" class="asc-prive">-3<small>🔒 TRIP</small></button>
 </div>
 <div id="chat-messages" class="hud" aria-live="polite"></div>
 <div id="chat-saisie"><input id="chat-champ" maxlength="120" placeholder="Écris ton message… (Entrée pour envoyer)" autocomplete="off" aria-label="Message"><button id="chat-envoyer">Envoyer</button></div>
@@ -198,5 +200,7 @@
 <script src="js/16-pas-passager.js"></script>
 <script src="js/17-multijoueur.js"></script>
 <script src="js/18-adversaires-boucle.js"></script>
+<script src="js/19-trip.js"></script>
+<script src="js/20-circuits.js"></script>
 </body>
 </html>

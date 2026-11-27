@@ -76,11 +76,10 @@ document.getElementById('cartes-voitures').addEventListener('click', e => {
 function afficherRecords() {
   let rec = {};
   try { rec = JSON.parse(localStorage.getItem('monde3d-records')) || {}; } catch (e) {}
-  document.getElementById('liste-records').innerHTML = voitures.map(v => {
-    const t = rec[v.nom];
-    const texte = typeof t === 'number' ? `${Math.floor(t / 60)}:${(t % 60 < 10 ? '0' : '') + (t % 60).toFixed(2)}` : '—';
-    return `<div class="record"><span>${v.specs.nom}</span><b>${texte}</b></div>`;
-  }).join('');
+  const texte = t => (typeof t === 'number' ? `${Math.floor(t / 60)}:${(t % 60 < 10 ? '0' : '') + (t % 60).toFixed(2)}` : '—');
+  // Une ligne par modèle de voiture : record sur le circuit du haut, puis sur le TRIP
+  document.getElementById('liste-records').innerHTML = '<div class="record record-tete"><span>Voiture</span><b>Circuit</b><b>TRIP</b></div>' +
+    Object.keys(SPECS).map(nom => `<div class="record"><span>${SPECS[nom].nom}</span><b>${texte(rec[nom])}</b><b>${texte(rec['trip:' + nom])}</b></div>`).join('');
 }
 document.getElementById('btn-effacer-records').onclick = () => {
   try { localStorage.removeItem('monde3d-records'); } catch (e) {}
@@ -195,6 +194,7 @@ addEventListener('keydown', e => {
   if (t === reglages.touches.replacer) { if (enVoiture) replacerVoiture(); else recharger(); }
   if (t === '1' || t === '&') appelerAscenseur('-1');           // « & » : la touche 1 d'un clavier AZERTY sans Maj
   if (t === '2' || t === 'é') appelerAscenseur('-2');
+  if (t === '3' || t === '"') appelerAscenseur('-3');           // niveau -3 (TRIP) : demande le code
 });
 document.querySelectorAll('#ascenseur button').forEach(b => b.addEventListener('click', () => appelerAscenseur(b.dataset.niveau)));
 addEventListener('keyup', e => { touches[e.key.toLowerCase()] = false; });

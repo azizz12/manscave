@@ -4,11 +4,18 @@
 // =====================================================================
 const SOUS_SOL = { x1: -24, x2: 24, z1: 92, z2: 170, y: -7 };   // le grand espace sous la ville
 const RAMPE = { z1: 60, z2: 92 };                               // la rampe descend de z = 60 à z = 92
+// Le niveau -3 : le hangar privé du circuit TRIP (sous le BITCHA Garage, accessible par l'ascenseur avec un code)
+const TRIP = { x1: -175, x2: 128, z1: -30, z2: 250, y: -34, plafond: -16 };
+const Y_TRIP = -17;                                             // en dessous de cette hauteur, on est au niveau -3
 
 // Hauteur du sol à un endroit donné (dépend de l'étage où l'on se trouve)
 function hauteurSol(x, z, yActuel) {
-  // L'ascenseur : on est sur la plateforme (ou au-dessus) → sa hauteur ; en dessous → le sol du garage
-  if (yActuel < -3 && x > 15.2 && x < 23.8 && z > 131.2 && z < 138.8) return yActuel > ASC.y - 1.5 ? ASC.y : -14;
+  // L'ascenseur : sur la plateforme (ou au-dessus) → sa hauteur ; en dessous → l'étage d'en dessous
+  if (yActuel < -3 && x > 15.2 && x < 23.8 && z > 131.2 && z < 138.8) {
+    if (yActuel > ASC.y - 1.5) return ASC.y;
+    return yActuel > GARAGE.y - 1.5 ? GARAGE.y : TRIP.y;
+  }
+  if (yActuel < Y_TRIP) return hauteurTrip(x, z, yActuel);                                // le hangar TRIP (niveau -3)
   if (yActuel < -10.5 && x > -24 && x < 24 && z > 96 && z < 168) return -14;               // le BITCHA Garage (niveau -2)
   if (yActuel < -10.5 && x > -16 && x < 8 && z >= 168 && z < 196) return -14;               // le stand de tir
   if (x > -6 && x < 6 && z > RAMPE.z1 && z < RAMPE.z2) return SOUS_SOL.y * (z - RAMPE.z1) / (RAMPE.z2 - RAMPE.z1);
@@ -20,7 +27,7 @@ function hauteurSol(x, z, yActuel) {
   if (info && info.type === 'piste' && info.dist < info.w + 0.8 && Math.abs(info.y - yActuel) < 2.5) return info.y;
   return hauteurTerrain(x, z);
 }
-const niveauDe = y => (y < -10.5 ? 'garage' : y < -3 ? 'sous-sol' : 'surface');
+const niveauDe = y => (y < Y_TRIP ? 'trip' : y < -10.5 ? 'garage' : y < -3 ? 'sous-sol' : 'surface');
 const memeNiveau = (o, niveau) => o.niveau === 'tous' || (o.niveau || 'surface') === niveau;
 
 const matBeton = std('#8b9097', 0.9);
@@ -140,76 +147,79 @@ const LIGNE_DEPART = 150;
 // 3c. LES FEUX DE DÉPART façon Formule 1 (5 colonnes de 2 feux rouges)
 // =====================================================================
 const matPortique = std('#1c1f24', 0.5, 0.4);
-for (const s of [-1, 1]) {
-  boite(0.5, 4.8, 0.5, s * 9, SOUS_SOL.y + 2.4, LIGNE_DEPART + 1.5, matPortique, 'sous-sol');
-}
-boite(18.6, 0.9, 0.7, 0, SOUS_SOL.y + 4.6, LIGNE_DEPART + 1.5, matPortique, 'aucun', false);
 const matFeuEteint = new THREE.MeshBasicMaterial({ color: '#3a0f12' });
 const matFeuAllume = new THREE.MeshBasicMaterial({ color: '#ff2a2a' });
-const colonnesFeux = [];
-for (let i = 0; i < 5; i++) {
-  const x = (i - 2) * 1.6;
-  boite(1.0, 1.8, 0.45, x, SOUS_SOL.y + 3.25, LIGNE_DEPART + 1.5, matPortique, 'aucun', false);
-  const feux = [0.42, -0.42].map(dy => {
-    const f = new THREE.Mesh(new THREE.CircleGeometry(0.3, 24), matFeuEteint);
-    f.position.set(x, SOUS_SOL.y + 3.25 + dy, LIGNE_DEPART + 1.5 - 0.24);   // tournés vers la grille (-Z)
-    f.rotation.y = Math.PI;
-    scene.add(f);
-    return f;
-  });
-  colonnesFeux.push(feux);
+// Un portique de feux au-dessus de la ligne. Sans rotation, les feux regardent vers -Z (la grille est derrière, côté -Z).
+function creerFeux({ x, y, z, rotY = 0, matCadre = matPortique, niveau, murs = mursCamera }) {
+  const g = new THREE.Group();
+  const bloc = (l, h, p, bx, by) => { const m = new THREE.Mesh(new THREE.BoxGeometry(l, h, p), matCadre); m.position.set(bx, by, 0); m.castShadow = true; g.add(m); };
+  for (const c of [-1, 1]) bloc(0.5, 4.8, 0.5, c * 9, 2.4);
+  bloc(18.6, 0.9, 0.7, 0, 4.6);
+  const colonnes = [];
+  for (let i = 0; i < 5; i++) {
+    const fx = (i - 2) * 1.6;
+    bloc(1.0, 1.8, 0.45, fx, 3.25);
+    colonnes.push([0.42, -0.42].map(dy => {
+      const f = new THREE.Mesh(new THREE.CircleGeometry(0.3, 24), matFeuEteint);
+      f.position.set(fx, 3.25 + dy, -0.24); f.rotation.y = Math.PI;
+      g.add(f); return f;
+    }));
+  }
+  g.position.set(x, y, z); g.rotation.y = rotY; scene.add(g); murs.push(g.children[0], g.children[1]);
+  for (const c of [-1, 1]) obstacles.push({ x: x + Math.cos(rotY) * c * 9, z: z - Math.sin(rotY) * c * 9, rayon: 0.45, niveau });   // les 2 poteaux
+  let allumees = -1;
+  return {
+    groupe: g,
+    allumer(n) {                                        // allume les n premières colonnes
+      if (n === allumees) return;
+      allumees = n;
+      colonnes.forEach((feux, i) => feux.forEach(f => { f.material = i < n ? matFeuAllume : matFeuEteint; }));
+    },
+  };
 }
-function allumerFeux(n) {                              // allume les n premières colonnes
-  colonnesFeux.forEach((feux, i) => feux.forEach(f => { f.material = i < n ? matFeuAllume : matFeuEteint; }));
-}
+const FEUX_HAUT = creerFeux({ x: 0, y: SOUS_SOL.y, z: LIGNE_DEPART + 1.5, niveau: 'sous-sol' });
 
-// --- La console de course : un gros bouton à presser (touche E) pour préparer le départ
-const CONSOLE = { x: -9.5, z: 124 };
-const console3D = new THREE.Group();
-{
-  const socleC = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.0, 0.8), std('#1c1f24', 0.4, 0.6));
-  socleC.position.y = 0.5; socleC.castShadow = true;
-  const pupitre = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 0.95), std('#2a2e36', 0.35, 0.5));
-  pupitre.position.set(0, 1.06, 0); pupitre.rotation.x = -0.35;
-  const liseret = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.04, 0.82), new THREE.MeshStandardMaterial({ color: '#7fe8ff', emissive: '#4fd8ff', emissiveIntensity: 1.6 }));
-  liseret.position.set(0, 0.3, 0);
-  console3D.add(socleC, pupitre, liseret);
-}
+// --- La console de course : un gros bouton à presser (touche E) pour préparer le départ, et son écran
 const matBoutonOff = new THREE.MeshStandardMaterial({ color: '#d8262f', emissive: '#ff2030', emissiveIntensity: 0.9, roughness: 0.3 });
 const matBoutonOn = new THREE.MeshStandardMaterial({ color: '#2fd17a', emissive: '#30ff8a', emissiveIntensity: 1.4, roughness: 0.3 });
-const boutonCourse = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.12, 32), matBoutonOff);
-boutonCourse.position.set(0, 1.16, 0.05); boutonCourse.rotation.x = -0.35;
-const bague = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.03, 8, 32), std('#e2e6ec', 0.15, 1));
-bague.position.copy(boutonCourse.position); bague.rotation.x = Math.PI / 2 - 0.35;
-console3D.add(boutonCourse, bague);
-// Écran au-dessus de la console
-const toileEcran = document.createElement('canvas'); toileEcran.width = 512; toileEcran.height = 192;
-const texEcran = new THREE.CanvasTexture(toileEcran);
-const ecran = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.72), new THREE.MeshBasicMaterial({ map: texEcran }));
-ecran.position.set(0, 2.05, -0.2);
-const cadreEcran = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.82, 0.08), std('#1c1f24', 0.4, 0.6));
-cadreEcran.position.set(0, 2.05, -0.25);
-const piedEcran = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.2, 0.1), std('#1c1f24', 0.4, 0.6));
-piedEcran.position.set(0, 1.2, -0.28);
-console3D.add(cadreEcran, ecran, piedEcran);
-console3D.position.set(CONSOLE.x, SOUS_SOL.y, CONSOLE.z);
-console3D.rotation.y = Math.PI / 2;                    // tournée vers l'allée
-scene.add(console3D);
-obstacles.push({ x: CONSOLE.x, z: CONSOLE.z, rayon: 0.8, niveau: 'sous-sol' });
-let texteEcran = '';
-function majEcran(titre, ligne, couleur) {
-  const cle = titre + ligne + couleur;
-  if (cle === texteEcran) return;
-  texteEcran = cle;
-  const c = toileEcran.getContext('2d');
-  c.fillStyle = '#0b1020'; c.fillRect(0, 0, 512, 192);
-  c.fillStyle = couleur; c.font = '900 64px system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.fillText(titre, 256, 72);
-  c.fillStyle = '#cfd8e8'; c.font = '600 28px system-ui, sans-serif';
-  c.fillText(ligne, 256, 140);
-  texEcran.needsUpdate = true;
+function creerConsole({ x, y, z, rotY = Math.PI / 2, couleurLiseret = '#4fd8ff', niveau }) {
+  const g = new THREE.Group();
+  const matSombre = std('#1c1f24', 0.4, 0.6);
+  const ajouter = (geo, mat, px, py, pz, rx = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.rotation.x = rx; g.add(m); return m; };
+  ajouter(new THREE.BoxGeometry(1.1, 1.0, 0.8), matSombre, 0, 0.5, 0).castShadow = true;
+  ajouter(new THREE.BoxGeometry(1.2, 0.12, 0.95), std('#2a2e36', 0.35, 0.5), 0, 1.06, 0, -0.35);
+  ajouter(new THREE.BoxGeometry(1.12, 0.04, 0.82), new THREE.MeshStandardMaterial({ color: couleurLiseret, emissive: couleurLiseret, emissiveIntensity: 1.6 }), 0, 0.3, 0);
+  const bouton = ajouter(new THREE.CylinderGeometry(0.2, 0.22, 0.12, 32), matBoutonOff, 0, 1.16, 0.05, -0.35);
+  ajouter(new THREE.TorusGeometry(0.24, 0.03, 8, 32), std('#e2e6ec', 0.15, 1), 0, 1.16, 0.05, Math.PI / 2 - 0.35);
+  // L'écran au-dessus de la console
+  const toile = document.createElement('canvas'); toile.width = 512; toile.height = 192;
+  const tex = new THREE.CanvasTexture(toile);
+  ajouter(new THREE.BoxGeometry(2.0, 0.82, 0.08), matSombre, 0, 2.05, -0.25);
+  ajouter(new THREE.PlaneGeometry(1.9, 0.72), new THREE.MeshBasicMaterial({ map: tex }), 0, 2.05, -0.2);
+  ajouter(new THREE.BoxGeometry(0.1, 1.2, 0.1), matSombre, 0, 1.2, -0.28);
+  g.position.set(x, y, z); g.rotation.y = rotY; scene.add(g);
+  obstacles.push({ x, z, rayon: 0.8, niveau });
+  let texte = '';
+  const c = {
+    x, y, z, bouton,
+    ecran(titre, ligne, couleur) {
+      const cle = titre + ligne + couleur;
+      if (cle === texte) return;
+      texte = cle;
+      const k = toile.getContext('2d');
+      k.fillStyle = '#0b1020'; k.fillRect(0, 0, 512, 192);
+      k.fillStyle = couleur; k.font = '900 64px system-ui, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle';
+      k.fillText(titre, 256, 72);
+      k.fillStyle = '#cfd8e8'; k.font = '600 28px system-ui, sans-serif';
+      k.fillText(ligne, 256, 140);
+      tex.needsUpdate = true;
+    },
+    appuyer() { bouton.position.y = 1.12; setTimeout(() => { bouton.position.y = 1.16; }, 150); },   // le bouton s'enfonce
+  };
+  c.ecran('COURSE', 'Appuie sur E', '#ff4a55');
+  return c;
 }
-majEcran('COURSE', 'Appuie sur E', '#ff4a55');
+const CONSOLE_HAUT = creerConsole({ x: -9.5, y: SOUS_SOL.y, z: 124, niveau: 'sous-sol' });
 
 // Panneau en surface pour trouver le sous-sol
 const panneauSousSol = creerPanneau('Sous-sol ↓', 'Grille de départ · circuit 7 km');

@@ -3,15 +3,20 @@
 // 4b. LE « BITCHA GARAGE » (niveau -2, sous la grille de départ) ET L'ASCENSEUR À VOITURES
 // =====================================================================
 const GARAGE = { x1: -24, x2: 24, z1: 96, z2: 168, y: -14, plafond: -7.6 };
-// L'ascenseur : une grande plateforme qui monte et descend entre le niveau -1 (parking) et le niveau -2 (garage)
-const ASC = { x1: 15.2, x2: 23.8, z1: 131.2, z2: 138.8, y: SOUS_SOL.y, cible: SOUS_SOL.y, bouge: false };
-const NIVEAUX_ASC = { '-1': SOUS_SOL.y, '-2': GARAGE.y };
+// L'ascenseur : une grande plateforme qui va du niveau -1 (parking) au niveau -2 (garage) et au niveau -3 (TRIP, avec un code)
+const ASC = { x1: 15.2, x2: 23.8, z1: 131.2, z2: 138.8, y: SOUS_SOL.y, cible: SOUS_SOL.y, bouge: false, tripAutorise: false };
+const NIVEAUX_ASC = { '-1': SOUS_SOL.y, '-2': GARAGE.y, '-3': TRIP.y };
+const niveauHauteur = y => (y > (SOUS_SOL.y + GARAGE.y) / 2 ? '-1' : y > (GARAGE.y + TRIP.y) / 2 ? '-2' : '-3');
 const dansAscenseur = (x, z) => x > ASC.x1 && x < ASC.x2 && z > ASC.z1 && z < ASC.z2;
 {
   const H = GARAGE.plafond - GARAGE.y, yc = GARAGE.y + H / 2;
   const matSolGarage = new THREE.MeshStandardMaterial({ color: '#25282e', roughness: 0.5, metalness: 0.1 });   // résine brillante
-  const solG = new THREE.Mesh(new THREE.PlaneGeometry(GARAGE.x2 - GARAGE.x1, GARAGE.z2 - GARAGE.z1), matSolGarage);
-  solG.rotation.x = -Math.PI / 2; solG.position.set(0, GARAGE.y, (GARAGE.z1 + GARAGE.z2) / 2); solG.receiveShadow = true; scene.add(solG);
+  // Le sol, en 4 morceaux autour du puits de l'ascenseur (la plateforme descend plus bas, jusqu'au niveau -3)
+  for (const [x1, x2, z1, z2] of [[GARAGE.x1, GARAGE.x2, GARAGE.z1, ASC.z1], [GARAGE.x1, GARAGE.x2, ASC.z2, GARAGE.z2],
+                                  [GARAGE.x1, ASC.x1, ASC.z1, ASC.z2], [ASC.x2, GARAGE.x2, ASC.z1, ASC.z2]]) {
+    const solG = new THREE.Mesh(new THREE.PlaneGeometry(x2 - x1, z2 - z1), matSolGarage);
+    solG.rotation.x = -Math.PI / 2; solG.position.set((x1 + x2) / 2, GARAGE.y, (z1 + z2) / 2); solG.receiveShadow = true; scene.add(solG);
+  }
   // Plafond (avec le trou de l'ascenseur) et murs
   const matPlafondG = std('#1b1d22', 0.9);
   const ep = 0.5, yp = GARAGE.plafond + ep / 2;
@@ -98,34 +103,39 @@ const plateformeAsc = new THREE.Group();
   const boitier = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.9, 0.6), std('#2a2e36', 0.35, 0.5)); boitier.position.set(l / 2 - 0.62, 1.5, -p / 2 + 0.6);
   plateformeAsc.add(poteau, boitier);
   ASC.boutons = {};
-  for (const [nom, dy] of [['-1', 0.18], ['-2', -0.18]]) {
+  for (const [nom, dy] of [['-1', 0.27], ['-2', 0], ['-3', -0.27]]) {
     const tb = document.createElement('canvas'); tb.width = tb.height = 64;
     const cb = tb.getContext('2d'); cb.fillStyle = '#fff'; cb.font = '800 30px system-ui'; cb.textAlign = 'center'; cb.textBaseline = 'middle'; cb.fillText(nom, 32, 34);
     const m = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(tb), color: '#888', emissive: '#30ff8a', emissiveIntensity: 0 });
-    const b = new THREE.Mesh(new THREE.CircleGeometry(0.13, 24), m);
+    const b = new THREE.Mesh(new THREE.CircleGeometry(0.11, 24), m);
     b.position.set(l / 2 - 0.73, 1.5 + dy, -p / 2 + 0.6); b.rotation.y = -Math.PI / 2;
     plateformeAsc.add(b); ASC.boutons[nom] = m;
   }
 }
-const niveauAscenseur = () => (ASC.y < (SOUS_SOL.y + GARAGE.y) / 2 ? '-2' : '-1');
+const niveauAscenseur = () => niveauHauteur(ASC.y);
 // Est-on sur la plateforme, ou juste devant la porte de l'ascenseur ?
 function presAscenseur() {
   const p = enVoiture ? vehicule.position : { x: etat.x, y: etat.y, z: etat.z };
   if (p.y > -3) return false;
   return p.x > ASC.x1 - 7 && p.x < ASC.x2 && p.z > ASC.z1 - 3 && p.z < ASC.z2 + 3;
 }
-function appelerAscenseur(niveau) {
+function appelerAscenseur(niveau, codeBon = false) {
   if (!presAscenseur() || ASC.bouge || !(niveau in NIVEAUX_ASC)) return;
   if (NIVEAUX_ASC[niveau] === ASC.y) { annoncer(`Tu es déjà au niveau ${niveau}`, 'cp'); return; }
+  // Le niveau -3 est privé : il faut le code (une seule fois par partie)
+  if (niveau === '-3' && !ASC.tripAutorise && !codeBon) { ouvrirClavier('trip'); return; }
+  if (codeBon) ASC.tripAutorise = true;
   ASC.cible = NIVEAUX_ASC[niveau]; ASC.bouge = true;
   ASC.commande = [niveau, Date.now()];                   // envoyée aux autres joueurs
   sonClic();
-  annoncer(niveau === '-2' ? '↓ BITCHA Garage' : '↑ Niveau -1 · départ', 'cp');
+  annoncer({ '-1': '↑ Niveau -1 · départ', '-2': (ASC.y > GARAGE.y ? '↓' : '↑') + ' BITCHA Garage', '-3': '↓ Niveau -3 · TRIP' }[niveau], 'cp');
 }
 let sonAsc = null;
 function majAscenseur(dt) {
   if (ASC.bouge) {
-    const d = ASC.cible - ASC.y, pas = Math.sign(d) * Math.min(Math.abs(d), 1.7 * dt * Math.min(1, 0.25 + Math.abs(d) * 0.4));
+    // Plus vite sur les longs trajets (vers le -3), et on ralentit en arrivant
+    const d = ASC.cible - ASC.y, vMax = clamp(Math.abs(d) * 0.6, 1.7, 5.5);
+    const pas = Math.sign(d) * Math.min(Math.abs(d), vMax * dt * Math.min(1, 0.25 + Math.abs(d) * 0.4));
     ASC.y += pas;
     if (Math.abs(ASC.cible - ASC.y) < 0.001) {
       ASC.y = ASC.cible; ASC.bouge = false;
@@ -150,7 +160,8 @@ function majAscenseur(dt) {
     sonAsc.gain.setTargetAtTime(ASC.bouge ? 0.06 : 0, audio.ctx.currentTime, 0.15);
   }
   // Boutons allumés (le niveau où on va / où on est)
-  const actuel = ASC.bouge ? (ASC.cible === GARAGE.y ? '-2' : '-1') : niveauAscenseur();
+  const actuel = niveauHauteur(ASC.bouge ? ASC.cible : ASC.y);
+  majGardeCorps();
   for (const n in ASC.boutons) ASC.boutons[n].emissiveIntensity = n === actuel ? 1.6 : 0.05;
   // Le petit panneau à l'écran avec les boutons
   const pres = enJeu && presAscenseur();
@@ -543,9 +554,9 @@ const porte = { ouverte: false, t: 0, minuteur: 0, x0: -13.5, z: GARAGE.z2 + 0.5
   porte.obstacle = { boite: true, niveau: 'garage', minX: -15.5, maxX: -11.5, minZ: porte.z - 0.5, maxZ: porte.z + 0.5 };
   obstacles.push(porte.obstacle);
 }
-// L'empreinte du code (on ne garde jamais le code lui-même dans le jeu)
-const EMPREINTE_CODE = 0x26eaa420;
-function empreinte(texte) { let h = 0x811c9dc5; for (const c of new TextEncoder().encode('manscave-porte:' + texte)) { h ^= c; h = Math.imul(h, 0x01000193) >>> 0; } return h; }
+// Les empreintes des codes (on ne garde jamais les codes eux-mêmes dans le jeu) : porte du stand de tir et niveau -3
+const EMPREINTE_CODE = 0x26eaa420, EMPREINTE_TRIP = 0xb2f55327;
+function empreinte(texte, sel = 'manscave-porte:') { let h = 0x811c9dc5; for (const c of new TextEncoder().encode(sel + texte)) { h ^= c; h = Math.imul(h, 0x01000193) >>> 0; } return h; }
 const presClavier = () => !enVoiture && etat.y < -10.5 && Math.hypot(etat.x + 10.85, etat.z - (porte.z - 1.1)) < 1.8;
 const presBoutonInterieur = () => !enVoiture && etat.y < -10.5 && Math.hypot(etat.x + 10.85, etat.z - (porte.z + 1.1)) < 1.8;
 function ouvrirPorte(venantDAutrui = false) {
@@ -561,9 +572,11 @@ function fermerPorte() {
   sonArme('porte');
 }
 // Le pavé numérique à l'écran
-const clavier = { ouvert: false, saisie: '' };
-function ouvrirClavier() {
-  clavier.ouvert = true; clavier.saisie = ''; majClavier('');
+// Il sert à deux choses : la porte du stand de tir (mode 'porte') et le bouton -3 de l'ascenseur (mode 'trip')
+const clavier = { ouvert: false, saisie: '', mode: 'porte' };
+function ouvrirClavier(mode = 'porte') {
+  clavier.ouvert = true; clavier.saisie = ''; clavier.mode = mode; majClavier('');
+  document.querySelector('#clavier-code .code-tete b').textContent = mode === 'trip' ? 'ASCENSEUR · NIVEAU -3 PRIVÉ' : 'ACCÈS STAND DE TIR';
   $('clavier-code').classList.add('ouvert');
   if (document.pointerLockElement) { liberationVoulue = true; document.exitPointerLock(); }
   for (const k in touches) touches[k] = false;
@@ -577,8 +590,10 @@ function majClavier(etatEcran) {
 function toucheClavier(v) {
   if (v === 'effacer') clavier.saisie = clavier.saisie.slice(0, -1);
   else if (v === 'ok') {
-    if (empreinte(clavier.saisie) === EMPREINTE_CODE) {
-      sonArme('bip'); majClavier('bon'); ouvrirPorte();
+    const trip = clavier.mode === 'trip';
+    if (trip ? empreinte(clavier.saisie, 'manscave-trip:') === EMPREINTE_TRIP : empreinte(clavier.saisie) === EMPREINTE_CODE) {
+      sonArme('bip'); majClavier('bon');
+      if (trip) appelerAscenseur('-3', true); else ouvrirPorte();
       setTimeout(fermerClavier, 450);
       return;
     }
@@ -617,16 +632,22 @@ const objetsDehors = scene.children.slice(debutVille, finVille).concat(scene.chi
 const objetsHauts = scene.children.slice(debutVille, finVille).filter(o => o.position.y > 0.1).concat(scene.children.slice(debutDecor, finDehors));
 let zoneVisible = '';
 function majVisibilite(y, z) {
-  const zone = y < -10.5 ? 'garage' : y < -3 ? (z > 105 ? 'parking' : 'sous-sol') : 'dehors';
+  const zone = y < Y_TRIP ? 'trip' : y < -10.5 ? 'garage' : y < -3 ? (z > 105 ? 'parking' : 'sous-sol') : 'dehors';
   const puitsOuvert = ASC.y < SOUS_SOL.y - 0.3;          // la plateforme n'est pas en haut : on voit le garage par le trou
   if (zone + puitsOuvert === zoneVisible) return;
   zoneVisible = zone + puitsOuvert;
   renderer.shadowMap.autoUpdate = zone === 'dehors' || zone === 'sous-sol';   // sous terre, pas besoin de recalculer les ombres du soleil
   renderer.shadowMap.needsUpdate = true;
+  // Au niveau -3, on ne voit que le hangar TRIP ; ailleurs, le hangar est caché
+  const auTrip = zone === 'trip';
+  for (const o of objetsTrip) o.visible = auTrip;
+  for (const o of objetsHorsTrip) o.visible = !auTrip;
+  for (const v of voitures) v.groupe.visible = (v.groupe.position.y < Y_TRIP) === auTrip
+    && (!v.couleurFixe || zone !== 'dehors' || v.groupe.position.y > -10.5);   // une voiture du garage sortie reste visible
+  if (auTrip) return;
   for (const o of objetsGarage) o.visible = zone === 'garage' || (zone !== 'dehors' && puitsOuvert);
   for (const o of objetsDehors) o.visible = zone !== 'garage';
   if (zone === 'parking') for (const o of objetsHauts) o.visible = false;
-  for (const v of voitures) if (v.couleurFixe) v.groupe.visible = zone !== 'dehors' || v.groupe.position.y > -10.5;   // une voiture du garage sortie reste visible
 }
 // --- Une fontaine au centre de la place (à la place de l'ancien plateau)
 {
@@ -704,3 +725,7 @@ for (const v of voitures) {                            // un panneau au-dessus d
   scene.add(p);
   v.panneau = p;
 }
+// Ce qu'on cache au niveau -3 : la ville, le circuit du haut, le sous-sol, le garage… (ni les lumières, ni les voitures, ni leurs panneaux)
+const finGarage = scene.children.length;
+const objetsHorsTrip = [ciel].concat(scene.children.slice(debutVille, finGarage).filter(o => !o.isLight && o !== plateformeAsc
+  && !voitures.some(v => v.groupe === o || v.panneau === o)));

@@ -33,7 +33,7 @@ function basculerVoiture() {
     angleCamera = 0;
   } else {
     if (Math.hypot(auto.vx, auto.vz) > 4) return;        // on ne saute pas d'une voiture lancée !
-    if (auto.surCircuit && Math.abs(vehicule.position.y) > 1) { annoncer('Pas ici !', 'faux'); return; }   // pont ou tunnel
+    if (auto.surCircuit && Math.abs(vehicule.position.y - circuitActif.ySol) > 1) { annoncer('Pas ici !', 'faux'); return; }   // pont, rampe ou tunnel
     enVoiture = false;
     // Le pilote ressort à gauche de la voiture
     etat.x = vehicule.position.x - Math.cos(auto.cap) * 2.1;
@@ -47,7 +47,10 @@ function basculerVoiture() {
 }
 
 // Touche E : presser le bouton de la console si on est à côté, sinon monter / descendre de voiture
-const presConsole = () => !enVoiture && etat.y < -3 && etat.y > -10 && Math.hypot(etat.x - CONSOLE.x, etat.z - CONSOLE.z) < 2.4;
+const presConsole = () => {
+  const c = circuitActif.console;
+  return !enVoiture && Math.abs(etat.y - c.y) < 3 && Math.hypot(etat.x - c.x, etat.z - c.z) < 2.4;
+};
 function actionE() {
   if (!enJeu) return;
   if (passager) { descendrePassager(); return; }
@@ -62,7 +65,7 @@ function actionE() {
   if (presConsole()) {
     if (depart.etat === 'course' || depart.etat === 'sequence') return;
     depart.arme = !depart.arme;
-    boutonCourse.position.y = 1.12; setTimeout(() => { boutonCourse.position.y = 1.16; }, 150);   // le bouton s'enfonce
+    circuitActif.console.appuyer();
     sonClic();
     annoncer(depart.arme ? 'Course prête !' : 'Course annulée', depart.arme ? 'go' : 'faux');
     return;

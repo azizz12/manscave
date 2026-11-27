@@ -83,9 +83,9 @@ function majAvatar(id, presence) {
   }
   // Passager : on ne dessine pas son pilote à pied (il est assis dans la voiture de quelqu'un)
   a.passagerDe = mode === 'p' && typeof presence.pa === 'string' ? presence.pa.slice(0, 40) : null;
-  (a.pieton || a.auto).groupe.visible = !a.passagerDe;
+  (a.pieton || a.auto).groupe.visible = !a.passagerDe && memeCircuit(a);   // (un joueur d'un autre étage n'est pas dessiné)
   // Ascenseur : une nouvelle commande de sa part → on l'applique aussi chez nous
-  const asc = Array.isArray(presence.asc) && (presence.asc[0] === '-1' || presence.asc[0] === '-2') && typeof presence.asc[1] === 'number' ? presence.asc : null;
+  const asc = Array.isArray(presence.asc) && Object.prototype.hasOwnProperty.call(NIVEAUX_ASC, presence.asc[0]) && typeof presence.asc[1] === 'number' ? presence.asc : null;
   if (!('ascVu' in a)) a.ascVu = asc ? asc[1] : null;     // à son arrivée : on n'applique pas ses vieilles commandes
   else if (asc && asc[1] !== a.ascVu) { a.ascVu = asc[1]; commandeAscenseur(asc[0]); }
   // Porte du stand : il l'a ouverte → elle s'ouvre chez nous aussi
@@ -231,10 +231,14 @@ function envoyerPresence() {
   salle.presence(p).catch(() => {});
 }
 
-// Départ groupé : si un autre joueur a lancé les feux et que je suis prêt sur la grille, je pars avec lui
+// Un autre joueur est-il sur le même circuit que moi ? (le TRIP est sous Y_TRIP : on le sait par sa hauteur)
+const memeCircuit = a => (nombre(a.presence.y, 0) < Y_TRIP) === (circuitActif.id === 'trip');
+
+// Départ groupé : si un autre joueur (sur le même circuit) a lancé les feux et que je suis prêt sur la grille, je pars avec lui
 function departGroupe() {
   if (!salle || depart.etat !== 'attente' || !depart.arme || !surLaGrille()) return;
   for (const a of autresJoueurs.values()) {
+    if (!memeCircuit(a)) continue;
     const reste = nombre(a.presence.go, -1);
     if (reste > 0.3 && reste < 6.5) {
       depart.etat = 'sequence';

@@ -89,13 +89,12 @@ function majPassagers() {
 }
 // Ascenseur et porte : quand un joueur les actionne, tout le monde voit la même chose
 function commandeAscenseur(niveau) {
-  if (!(niveau in NIVEAUX_ASC)) return;
+  if (!Object.prototype.hasOwnProperty.call(NIVEAUX_ASC, niveau)) return;
   ASC.cible = NIVEAUX_ASC[niveau]; ASC.bouge = Math.abs(ASC.cible - ASC.y) > 0.001;
 }
 
 // --- La course : départ façon F1, puis 3 tours avec 4 checkpoints par tour
 let NB_TOURS = 3;
-const CHECKPOINTS = [0.2, 0.4, 0.6, 0.8].map(f => Math.round(f * NB));   // positions sur la piste
 const depart = { arme: false, etat: 'attente', t: 0, attenteGo: 0, chrono: 0, tour: 0, tempsTour: 0, cpSuivant: 0, dernierIndice: 0, tours: [] };
 let records = {};
 try { records = JSON.parse(localStorage.getItem('monde3d-records')) || {}; } catch (e) {}
@@ -104,10 +103,9 @@ function formatTemps(t) {                               // 85.4 → « 1:25.40 �
   const m = Math.floor(t / 60), s = t - m * 60;
   return `${m}:${s < 10 ? '0' : ''}${s.toFixed(2)}`;
 }
-function surLaGrille() {
-  const p = vehicule.position;
-  return enVoiture && p.y < -3 && p.y > -10 && Math.abs(p.x) < 8 && p.z < LIGNE_DEPART - 2 && p.z > LIGNE_DEPART - 32;
-}
+const surLaGrille = () => enVoiture && circuitActif.surGrille(vehicule.position);
+// Les records sont gardés par voiture, et par circuit (le circuit du haut garde les anciens noms)
+const cleRecord = nom => (circuitActif.id === 'haut' ? nom : circuitActif.id + ':' + nom);
 function annoncer(texte, style) {
   const el = $('annonce');
   el.textContent = texte; el.className = 'hud ' + style;
@@ -123,6 +121,8 @@ function remettreCones() {
 const franchi = (avant, apres, cible) => avant < cible && apres >= cible && apres - avant < NB * 0.1;
 
 function majDepart(dt) {
+  const { feux, console: pupitre } = circuitActif;
+  const allumerFeux = n => feux.allumer(n);
   const arrete = Math.abs(auto.vitesse) < 0.5;
   const idx = auto.indicePiste ?? 0;
   if (depart.etat === 'attente') {
@@ -161,8 +161,9 @@ function majDepart(dt) {
       if (depart.cpSuivant === CHECKPOINTS.length) {
         const temps = depart.tempsTour;
         depart.tours.push(temps);
-        const record = depart.tour > 1 && (!records[voitureActive.nom] || temps < records[voitureActive.nom]);   // le 1er tour part de la grille : plus court
-        if (record) { records[voitureActive.nom] = temps; try { localStorage.setItem('monde3d-records', JSON.stringify(records)); } catch (e) {} }
+        const cle = cleRecord(voitureActive.nom);
+        const record = depart.tour > 1 && (!records[cle] || temps < records[cle]);   // le 1er tour part de la grille : plus court
+        if (record) { records[cle] = temps; try { localStorage.setItem('monde3d-records', JSON.stringify(records)); } catch (e) {} }
         if (depart.tour >= NB_TOURS) {
           depart.etat = 'arrivee'; depart.t = 0; depart.arme = false;
           arreterMusique(7);
@@ -183,17 +184,17 @@ function majDepart(dt) {
   }
 
   // Écran de la console et bouton (rouge = en attente, vert = course prête)
-  boutonCourse.material = depart.arme || depart.etat === 'course' ? matBoutonOn : matBoutonOff;
-  if (depart.etat === 'course') majEcran(`TOUR ${depart.tour}/${NB_TOURS}`, formatTemps(depart.tempsTour), '#ffd23f');
-  else if (depart.etat === 'sequence') majEcran('FEUX…', 'Attends l\'extinction', '#ff4a55');
-  else if (depart.arme) majEcran('PRÊT', 'Arrête-toi sur la grille', '#30ff8a');
-  else majEcran('COURSE', 'Appuie sur E', '#ff4a55');
+  pupitre.bouton.material = depart.arme || depart.etat === 'course' ? matBoutonOn : matBoutonOff;
+  if (depart.etat === 'course') pupitre.ecran(`TOUR ${depart.tour}/${NB_TOURS}`, formatTemps(depart.tempsTour), '#ffd23f');
+  else if (depart.etat === 'sequence') pupitre.ecran('FEUX…', 'Attends l\'extinction', '#ff4a55');
+  else if (depart.arme) pupitre.ecran('PRÊT', 'Arrête-toi sur la grille', '#30ff8a');
+  else pupitre.ecran('COURSE', 'Appuie sur E', '#ff4a55');
 
   // Affichage de la course en haut de l'écran
   const el = $('course');
   if (depart.etat === 'course' || depart.etat === 'arrivee') {
     el.style.display = 'block';
-    const meilleur = records[voitureActive.nom];
+    const meilleur = records[cleRecord(voitureActive.nom)];
     const echap = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const pos = positionJoueur(), total = bots.length + 1;
     const posTexte = total > 1 ? `<span>P${pos}/${total}</span>` : '';
@@ -209,31 +210,41 @@ function majDepart(dt) {
 
 // --- La mini-carte : le tracé vu de haut, avec la position des voitures
 const carte = $('carte'), ctxCarte = carte.getContext('2d');
-const fondCarte = document.createElement('canvas');
-const bornes = { x1: Infinity, x2: -Infinity, z1: Infinity, z2: -Infinity };
-for (const s of piste) { bornes.x1 = Math.min(bornes.x1, s.x); bornes.x2 = Math.max(bornes.x2, s.x); bornes.z1 = Math.min(bornes.z1, s.z); bornes.z2 = Math.max(bornes.z2, s.z); }
 const TAILLE_CARTE = 200, MARGE_CARTE = 12;
-const echelleCarte = (TAILLE_CARTE - 2 * MARGE_CARTE) / Math.max(bornes.x2 - bornes.x1, bornes.z2 - bornes.z1);
+carte.width = TAILLE_CARTE * 2; carte.height = TAILLE_CARTE * 2;
+// Chaque circuit a son propre fond de carte (dessiné une seule fois, la première fois qu'on y roule)
+let fondCarte, bornes, echelleCarte;
 const versCarte = (x, z) => [MARGE_CARTE + (x - bornes.x1) * echelleCarte, MARGE_CARTE + (z - bornes.z1) * echelleCarte];
-{
-  carte.width = fondCarte.width = TAILLE_CARTE * 2; carte.height = fondCarte.height = TAILLE_CARTE * 2;
-  const c = fondCarte.getContext('2d');
-  c.scale(2, 2);
-  const [vx, vz] = versCarte(-177, -177);              // la ville
-  c.fillStyle = 'rgba(255,255,255,.12)'; c.fillRect(vx, vz, 354 * echelleCarte, 354 * echelleCarte);
-  c.lineJoin = 'round'; c.lineCap = 'round';
-  for (const [largeur, couleur] of [[6, 'rgba(14,20,32,.9)'], [3, '#e9ecf2']]) {
-    c.strokeStyle = couleur; c.lineWidth = largeur; c.beginPath();
-    piste.forEach((s, i) => { const [x, z] = versCarte(s.x, s.z); i ? c.lineTo(x, z) : c.moveTo(x, z); });
-    c.closePath(); c.stroke();
+function preparerCarte(circuit) {
+  if (!circuit.carte) {
+    const b = { x1: Infinity, x2: -Infinity, z1: Infinity, z2: -Infinity };
+    for (const s of circuit.piste) { b.x1 = Math.min(b.x1, s.x); b.x2 = Math.max(b.x2, s.x); b.z1 = Math.min(b.z1, s.z); b.z2 = Math.max(b.z2, s.z); }
+    const fond = document.createElement('canvas'); fond.width = fond.height = TAILLE_CARTE * 2;
+    circuit.carte = { fond, bornes: b, echelle: (TAILLE_CARTE - 2 * MARGE_CARTE) / Math.max(b.x2 - b.x1, b.z2 - b.z1) };
+    ({ fond: fondCarte, bornes, echelle: echelleCarte } = circuit.carte);
+    const c = fond.getContext('2d');
+    c.scale(2, 2);
+    if (circuit.id === 'haut') {                       // la ville
+      const [vx, vz] = versCarte(-177, -177);
+      c.fillStyle = 'rgba(255,255,255,.12)'; c.fillRect(vx, vz, 354 * echelleCarte, 354 * echelleCarte);
+    }
+    const p = circuit.piste;
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    for (const [largeur, couleur] of circuit.couleursCarte || [[6, 'rgba(14,20,32,.9)'], [3, '#e9ecf2']]) {
+      c.strokeStyle = couleur; c.lineWidth = largeur; c.beginPath();
+      p.forEach((s, i) => { const [x, z] = versCarte(s.x, s.z); i ? c.lineTo(x, z) : c.moveTo(x, z); });
+      c.closePath(); c.stroke();
+    }
+    c.strokeStyle = '#6b7385'; c.lineWidth = 2; c.setLineDash([3, 3]); c.beginPath();   // parties souterraines / sous un pont
+    p.forEach((s, i) => { if (s.y < circuit.ySol - 1) { const [x, z] = versCarte(s.x, s.z); c.moveTo(x, z); c.lineTo(x + 0.1, z); } });
+    c.stroke(); c.setLineDash([]);
+    const [lx, lz] = versCarte(p[0].x, p[0].z);        // ligne de départ
+    c.fillStyle = '#ffffff'; c.fillRect(lx - 4, lz - 1.5, 8, 3);
+    circuit.checkpoints.forEach(i => { const [x, z] = versCarte(p[i].x, p[i].z); c.fillStyle = '#ffb02e'; c.beginPath(); c.arc(x, z, 2.5, 0, 7); c.fill(); });
   }
-  c.strokeStyle = '#6b7385'; c.lineWidth = 2; c.setLineDash([3, 3]); c.beginPath();   // partie souterraine
-  piste.forEach((s, i) => { if (s.y < -1) { const [x, z] = versCarte(s.x, s.z); c.moveTo(x, z); c.lineTo(x + 0.1, z); } });
-  c.stroke(); c.setLineDash([]);
-  const [lx, lz] = versCarte(piste[0].x, piste[0].z);  // ligne de départ
-  c.fillStyle = '#ffffff'; c.fillRect(lx - 4, lz - 1.5, 8, 3);
-  CHECKPOINTS.forEach(i => { const [x, z] = versCarte(piste[i].x, piste[i].z); c.fillStyle = '#ffb02e'; c.beginPath(); c.arc(x, z, 2.5, 0, 7); c.fill(); });
+  ({ fond: fondCarte, bornes, echelle: echelleCarte } = circuit.carte);
 }
+preparerCarte(CIRCUIT_HAUT);
 function majCarte() {
   ctxCarte.setTransform(1, 0, 0, 1, 0, 0);
   ctxCarte.clearRect(0, 0, carte.width, carte.height);
@@ -242,6 +253,7 @@ function majCarte() {
   for (const v of voitures) {                          // les autres voitures : petits points
     if (enVoiture && v === voitureActive) continue;
     const p = new THREE.Vector3(); v.groupe.getWorldPosition(p);
+    if ((p.y < Y_TRIP) !== (circuitActif.id === 'trip')) continue;   // une voiture d'un autre étage
     const [x, z] = versCarte(p.x, p.z);
     ctxCarte.fillStyle = '#9aa3b5'; ctxCarte.beginPath(); ctxCarte.arc(x, z, 2.5, 0, 7); ctxCarte.fill();
   }
@@ -252,6 +264,7 @@ function majCarte() {
     ctxCarte.beginPath(); ctxCarte.arc(x, z, 3.5, 0, 7); ctxCarte.fill(); ctxCarte.stroke();
   }
   for (const a of autresJoueurs.values()) {            // les autres joueurs : points orange
+    if (!memeCircuit(a)) continue;
     const [x, z] = versCarte(a.pos.x, a.pos.z);
     ctxCarte.fillStyle = '#ff8a1e'; ctxCarte.strokeStyle = '#141B34'; ctxCarte.lineWidth = 1.5;
     ctxCarte.beginPath(); ctxCarte.arc(x, z, 4, 0, 7); ctxCarte.fill(); ctxCarte.stroke();
@@ -270,9 +283,22 @@ function majCarte() {
 let sousSol = 0;
 const brumeDehors = new THREE.Color(COULEUR_HORIZON), brumeDedans = new THREE.Color('#2b2e34');
 let dehors = 0;
+const hemiCiel = hemi.color.clone(), hemiSolCouleur = hemi.groundColor.clone();
+const hemiTrip = new THREE.Color('#c9b4ff'), hemiSolTrip = new THREE.Color('#3a2060'), brumeTrip = new THREE.Color('#150b26');
 function majAmbiance(cible, dt) {
   const y = cible.y;
   majVisibilite(y, cible.z);
+  if (y < Y_TRIP) {                                     // le hangar TRIP : ni soleil ni ciel, des néons et une brume violette
+    soleil.intensity = 0; hemi.intensity = 1.15;
+    hemi.color.copy(hemiTrip); hemi.groundColor.copy(hemiSolTrip);
+    for (const l of lumieresParking) l.intensity = 0;
+    scene.fog.color.copy(brumeTrip); scene.fog.near = 90; scene.fog.far = 420;
+    scene.environment = envTrip;
+    sousSol = 1;
+    return;
+  }
+  scene.environment = envCiel;
+  hemi.color.copy(hemiCiel); hemi.groundColor.copy(hemiSolCouleur);
   sousSol += ((y < -2.5 ? 1 : 0) - sousSol) * Math.min(1, dt * 3);
   dehors += ((Math.abs(cible.x) > 190 || Math.abs(cible.z) > 190 ? 1 : 0) - dehors) * Math.min(1, dt * 1.5);
   soleil.intensity = 1.25 * (1 - sousSol) + 0.1 * sousSol;

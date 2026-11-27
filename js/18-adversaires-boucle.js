@@ -2,7 +2,6 @@
 // =====================================================================
 // 10. ADVERSAIRES (pilotés par l'ordinateur) ET BONUS À RAMASSER
 // =====================================================================
-const L_CIRCUIT = NB * PAS_PISTE;
 const modulo = (a, n) => ((a % n) + n) % n;
 // Position et orientation sur la piste à une distance « s » de la ligne et à « lat » mètres du centre
 function poseSurPiste(s, lat) {
@@ -58,7 +57,6 @@ const DEFS_BOTS = [
   { nom: 'Rex', voiture: 'furia', couleur: '#f2a516', niveau: 0.88 },
   { nom: 'Kiko', voiture: 'sprint', couleur: '#e0408a', niveau: 0.93 },
 ];
-const PLACES_GRILLE = [[-3, 144], [3, 138], [-3, 132], [3, 126]];
 let bots = [], botsEnPlace = false, sJoueur = 0, indicePrecedentJoueur = -1;
 
 function bulleBouclier() {
@@ -75,7 +73,7 @@ function placerBots() {
     Math.hypot(b[0] - vehicule.position.x, b[1] - vehicule.position.z) - Math.hypot(a[0] - vehicule.position.x, a[1] - vehicule.position.z)).slice(0, 3);
   for (let k = 0; k < nb; k++) {
     const d = DEFS_BOTS[k], [x, z] = libres[k];
-    const info = trouverPiste(x, SOUS_SOL.y, z);
+    const info = trouverPiste(x, circuitActif.yGrille, z);
     const groupe = new THREE.Group();
     const modeleBot = creerVoiture(d.voiture, d.couleur);
     modeleBot.rotation.order = 'YXZ'; modeleBot.rotation.y = -Math.PI / 2;
@@ -83,7 +81,8 @@ function placerBots() {
     const tag = etiquetteJoueur(d.nom); tag.position.y = 2.2; groupe.add(tag);
     const bulle = bulleBouclier(); groupe.add(bulle);
     scene.add(groupe);
-    const s0 = info.i * PAS_PISTE + ((x - info.s.x) * info.s.tx + (z - info.s.z) * info.s.tz);
+    let s0 = info.i * PAS_PISTE + ((x - info.s.x) * info.s.tx + (z - info.s.z) * info.s.tz);
+    if (s0 > L_CIRCUIT / 2) s0 -= L_CIRCUIT;            // grille juste derrière la ligne (TRIP) : on part « avant » le tour 1
     bots.push({ ...d, specs: SPECS[d.voiture], groupe, modele: modeleBot, bulle, s: s0, lat: info.lat, voie: info.lat, v: 0,
                 vrille: 0, angleVrille: 0, bouclier: 0, boost: 0, objet: null, tObjet: 0, fini: false, tempsFin: 0, prochainChangement: 3 });
   }
@@ -101,7 +100,7 @@ function majBots(dt) {
   // Distance parcourue par le joueur depuis le départ (pour le classement)
   if (depart.etat === 'course' && enVoiture) {
     const idx = auto.indicePiste ?? 0;
-    if (indicePrecedentJoueur < 0) { indicePrecedentJoueur = idx; sJoueur = idx * PAS_PISTE; }
+    if (indicePrecedentJoueur < 0) { indicePrecedentJoueur = idx; sJoueur = (idx > NB / 2 ? idx - NB : idx) * PAS_PISTE; }
     let d = idx - indicePrecedentJoueur;
     if (d > NB / 2) d -= NB; if (d < -NB / 2) d += NB;
     sJoueur += d * PAS_PISTE; indicePrecedentJoueur = idx;
@@ -141,7 +140,7 @@ function majBots(dt) {
       }
     }
     // Arrivée
-    if (!b.fini && enCourse && b.s >= NB_TOURS * L_CIRCUIT) { b.fini = true; b.tempsFin = depart.chrono; }
+    if (!b.fini && enCourse && b.s >= NB_TOURS * L_CIRCUIT) { b.fini = true; b.tempsFin = depart.chrono + (depart.etat === 'arrivee' ? depart.t : 0); }   // (après le joueur : le chrono du joueur est arrêté)
     // Position à l'écran
     b.groupe.position.set(pose.x, pose.y, pose.z);
     b.groupe.rotation.set(Math.atan(pose.pente), pose.cap, Math.atan(pose.releve * 0.9), 'YXZ');
@@ -165,9 +164,9 @@ function classement() {
 }
 function positionJoueur() { return classement().findIndex(p => p.moi) + 1; }
 
-// --- Les caisses mystère
-const caisses = [];
-{
+// --- Les caisses mystère : 6 rangées de 3 caisses par circuit, sur des lignes droites
+const geoCaisse = new THREE.BoxGeometry(1.25, 1.25, 1.25);
+const matCaisse = (() => {
   const t = document.createElement('canvas'); t.width = t.height = 128;
   const c = t.getContext('2d');
   const g = c.createLinearGradient(0, 0, 128, 128); g.addColorStop(0, '#ff5fd2'); g.addColorStop(0.5, '#ffd23f'); g.addColorStop(1, '#4fd8ff');
@@ -176,21 +175,26 @@ const caisses = [];
   c.fillStyle = '#ffffff'; c.font = '900 92px system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
   c.fillText('?', 64, 70);
   const tex = new THREE.CanvasTexture(t);
-  const mat = new THREE.MeshStandardMaterial({ map: tex, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.55, transparent: true, opacity: 0.92, roughness: 0.25 });
-  const geo = new THREE.BoxGeometry(1.25, 1.25, 1.25);
-  const valide = i => piste[i].type === 'piste' && !surTremplin(i) && piste[i].y > -1 && !piste[i].pont && Math.abs(piste[i].courbure) < 1 / 60
-    && !BOOSTS.some(b => Math.abs(modulo(i - b.i + NB / 2, NB) - NB / 2) < 6) && !BARRIERES_MOBILES.some(b => Math.abs(modulo(i - b.i + NB / 2, NB) - NB / 2) < 10);
-  for (const f of [0.1, 0.24, 0.39, 0.53, 0.66, 0.8]) {
-    let i = Math.round(f * NB);
-    while (!valide(i)) i = (i + 1) % NB;
+  return new THREE.MeshStandardMaterial({ map: tex, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.55, transparent: true, opacity: 0.92, roughness: 0.25 });
+})();
+// Place les caisses sur le circuit actif, aux fractions du tour données (en évitant tremplins, virages, ponts, boosts…)
+function creerCaisses(fractions) {
+  const liste = [], ySol = circuitActif.ySol;
+  const proche = (i, liste2, n) => liste2.some(b => Math.abs(modulo(i - b.i + NB / 2, NB) - NB / 2) < n);
+  const valide = i => piste[i].type === 'piste' && !surTremplin(i) && piste[i].y > ySol - 1 && !piste[i].pont && Math.abs(piste[i].courbure) < 1 / 60
+    && !proche(i, BOOSTS, 6) && !proche(i, BARRIERES_MOBILES, 10);
+  for (const f of fractions) {
+    let i = Math.round(f * NB), essais = 0;
+    while (!valide(i) && essais++ < NB) i = (i + 1) % NB;
     for (const k of [-0.45, 0, 0.45]) {
-      const lat = k * piste[i].w;
-      const m = new THREE.Mesh(geo, mat); m.castShadow = true; scene.add(m);
-      const p = poseSurPiste(i * PAS_PISTE, lat);
-      caisses.push({ mesh: m, x: p.x, y: p.y, z: p.z, actif: true, t: 0, phase: Math.random() * 6 });
+      const m = new THREE.Mesh(geoCaisse, matCaisse); m.castShadow = true; scene.add(m);
+      const p = poseSurPiste(i * PAS_PISTE, k * piste[i].w);
+      liste.push({ mesh: m, x: p.x, y: p.y, z: p.z, actif: true, t: 0, phase: Math.random() * 6 });
     }
   }
+  return liste;
 }
+let caisses = CIRCUIT_HAUT.caisses = creerCaisses([0.1, 0.24, 0.39, 0.53, 0.66, 0.8]);
 function majCaisses(dt) {
   for (const c of caisses) {
     if (!c.actif) { c.t -= dt; if (c.t <= 0) { c.actif = true; c.mesh.visible = true; } continue; }
@@ -305,7 +309,7 @@ function pilotesEnPiste() {
   const liste = [];
   if (enVoiture) liste.push({ type: 'joueur' });
   for (const b of bots) if (b.pose) liste.push({ type: 'bot', bot: b });
-  for (const [id, av] of autresJoueurs) if (av.mode === 'v') liste.push({ type: 'distant', id, av });
+  for (const [id, av] of autresJoueurs) if (av.mode === 'v' && memeCircuit(av)) liste.push({ type: 'distant', id, av });
   return liste;
 }
 const memePilote = (a, b) => a && b && a.type === b.type && (a.bot === b.bot) && (a.id === b.id);
@@ -411,7 +415,7 @@ function presenceObjets() {
 function majObjetsDistants(monPeer) {
   const vus = new Set();
   for (const [id, a] of autresJoueurs) {
-    const liste = Array.isArray(a.presence.pr) ? a.presence.pr.slice(0, 6) : [];
+    const liste = Array.isArray(a.presence.pr) && memeCircuit(a) ? a.presence.pr.slice(0, 6) : [];   // objets d'un autre circuit : ignorés
     for (const o of liste) {
       if (!Array.isArray(o) || o.length < 5) continue;
       const cle = id + ':' + texteSur(String(o[4]));
@@ -421,13 +425,13 @@ function majObjetsDistants(monPeer) {
       if (!m) { m = o[0] === 1 ? creerMissile() : creerMine(); objetsDistants.set(cle, m); }
       m.position.set(x, y + (o[0] === 1 ? 0.7 : 0), z);
       // Une mine de l'autre joueur sous mes roues ?
-      if (o[0] === 2 && enVoiture && !minesDejaTouchees.has(cle) && Math.hypot(x - vehicule.position.x, z - vehicule.position.z) < 1.9) {
+      if (o[0] === 2 && enVoiture && !minesDejaTouchees.has(cle) && Math.hypot(x - vehicule.position.x, z - vehicule.position.z) < 1.9 && Math.abs(y - vehicule.position.y) < 3) {
         minesDejaTouchees.add(cle); toucher({ type: 'joueur' });
       }
     }
     // Un autre joueur m'a touché avec un missile ?
     const coup = a.presence.coup;
-    if (coup && typeof coup === 'object' && coup.c === monPeer && nombre(coup.n) > (a.dernierCoup || 0)) {
+    if (coup && typeof coup === 'object' && coup.c === monPeer && nombre(coup.n) > (a.dernierCoup || 0) && memeCircuit(a)) {
       a.dernierCoup = nombre(coup.n);
       if (enVoiture) toucher({ type: 'joueur' });
     }
@@ -655,6 +659,7 @@ function boucle() {
   majArmes(dt);
   majPorte(dt);
   majSon(dt);
+  majCircuit(cibleCamera);
   majDepart(dt);
   // Effet de vitesse : le champ de vision s'élargit quand on va vite
   const fovCible = viseePremiere() ? 44 : (vuePremiere ? 70 : 55) + (enVoiture ? Math.min(22, Math.abs(auto.vitesse) * 3.6 * 0.075) : 0);
@@ -734,14 +739,15 @@ function boucle() {
     if (longueur > 0.01) {
       rayonCamera.set(vise, versCamera.divideScalar(longueur));
       rayonCamera.far = longueur + 0.3;
-      const touche = rayonCamera.intersectObjects(mursCamera, false)[0];
+      const touche = rayonCamera.intersectObjects(cibleCamera.y < Y_TRIP ? mursTrip : mursCamera, false)[0];
       if (touche) camPos.copy(vise).addScaledVector(versCamera, Math.max(0.5, touche.distance - 0.35));
     }
     camera.position.copy(camPos);
     // Au sous-sol, la caméra reste sous le plafond
     if (cibleCamera.y < -3 && camera.position.z > RAMPE.z2 - 1 && camera.position.z < 178) camera.position.y = Math.min(camera.position.y, -1);
     if (!modeVoiture) camera.position.y = Math.max(camera.position.y, hauteurSol(camera.position.x, camera.position.z, cibleCamera.y) + 0.25);   // jamais sous le sol
-    if (cibleCamera.y < -10.5) camera.position.y = Math.min(camera.position.y, GARAGE.plafond - 0.3);                // ni dans le plafond du garage
+    if (cibleCamera.y < Y_TRIP) camera.position.y = Math.min(camera.position.y, TRIP.plafond - 0.5);              // ni dans le plafond du hangar TRIP
+    else if (cibleCamera.y < -10.5) camera.position.y = Math.min(camera.position.y, GARAGE.plafond - 0.3);           // ni dans le plafond du garage
     camera.lookAt(vise.x, vise.y + (armeEnMain() ? reculVue : 0), vise.z);
   }
   if (secousse > 0) {                                   // petite secousse lors d'un choc ou d'un atterrissage
@@ -757,16 +763,3 @@ function boucle() {
   renderer.render(scene, camera);
   requestAnimationFrame(boucle);
 }
-
-appliquerCouleurs();
-NB_TOURS = reglages.tours || 3;
-document.getElementById('fps').style.display = reglages.fps !== false ? 'block' : 'none';
-majSurnom();
-ouvrirMenu();
-boucle();
-
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});

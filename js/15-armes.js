@@ -303,7 +303,7 @@ function sonArme(nom, volume = 1) {
 const dirCamArme = new THREE.Vector3();
 function majArmes(dt) {
   // L'arme ne sort pas du garage : en remontant, on la remet au casier
-  if (arme.equipee && (enVoiture ? vehicule.position.y : etat.y) > -10.5) { arme.equipee = false; casier.pistolets[0].visible = true; annoncer('Pistolet remis au casier', 'cp'); }
+  if (arme.equipee && niveauDe(enVoiture ? vehicule.position.y : etat.y) !== 'garage') { arme.equipee = false; casier.pistolets[0].visible = true; annoncer('Pistolet remis au casier', 'cp'); }
   pistoletMain.visible = armeEnMain();
   arme.attente = Math.max(0, arme.attente - dt);
   arme.recul = Math.max(0, arme.recul - dt * 3.2);
